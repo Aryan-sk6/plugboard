@@ -1,0 +1,28 @@
+{
+  "name": "plugboard",
+  "version": "0.1.0",
+  "description": "Turn your AI plugins and skills into simple clickable apps. Runs on your own computer with your own AI subscription.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "plugboard": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "public"
+  ],
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "npm run build && node dist/cli.js",
+    "test": "node --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit",
+    "prepare": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "typescript": "7.0.2"
+  }
+}
