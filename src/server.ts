@@ -96,7 +96,7 @@ export function createApp(opts: Options = {}) {
         return json(res, 200, { item, ...(await getRecipe(item, { dataDir: opts.dataDir ?? DATA, ask: opts.ask })) });
       }
 
-      const rel = url.pathname === '/' ? 'index.html' : decodeURIComponent(url.pathname.slice(1));
+      const rel = decodeURIComponent(url.pathname.slice(1)) + (url.pathname.endsWith('/') ? 'index.html' : '');
       const file = normalize(join(PUBLIC, rel));
       if (!file.startsWith(PUBLIC.endsWith(sep) ? PUBLIC : PUBLIC + sep)) return send(res, 404, 'text/plain', 'Not found');
       try {

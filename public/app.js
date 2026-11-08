@@ -1,3 +1,5 @@
+import { renderRecipe } from './renderer.js';
+
 // Plugboard screens. Plugin text and AI recipes are untrusted: only ever set with textContent, never as HTML.
 const app = document.getElementById('app');
 
@@ -78,47 +80,30 @@ function renderList(items, connected) {
 }
 
 // ---- Helper screen ----
-// STUB (M3): shows what the screen will contain. M3 replaces this with the real form components.
 
-const TYPE_NAMES = { text: 'Short text', longtext: 'Long text', number: 'Number', date: 'Date', dropdown: 'Choice list', checkbox: 'Tick box', file: 'File', table: 'Table' };
-
-function renderRecipe(data) {
+function showTool(data) {
   const { recipe, source, notice } = data;
   app.replaceChildren();
   const back = el('a', 'back', '← All helpers');
   back.href = '#';
   app.append(back, el('h2', 'tool-title', recipe.title), el('p', 'lede', recipe.summary));
   if (notice) app.append(el('p', 'notice', notice));
-  for (const screen of recipe.screens) {
-    const box = el('section', 'panel');
-    box.append(el('h3', null, screen.title));
-    if (screen.intro) box.append(el('p', 'desc', screen.intro));
-    const fields = el('ul', 'fields');
-    for (const f of screen.fields) {
-      const li = el('li');
-      li.append(el('strong', null, f.label), el('span', 'muted', ` · ${TYPE_NAMES[f.type] || f.type}${f.required ? ' · needed' : ''}`));
-      if (f.type === 'dropdown' && f.options) li.append(el('div', 'muted small', 'Choices: ' + f.options.join(', ')));
-      if (f.type === 'table' && f.columns) li.append(el('div', 'muted small', 'Columns: ' + f.columns.map((c) => c.label).join(', ')));
-      fields.append(li);
-    }
-    box.append(fields);
-    for (const a of screen.actions) {
-      const row = el('div', 'action');
-      const btn = el('button', null, a.label);
-      btn.disabled = true;
-      btn.title = 'Running helpers comes in a later version';
-      row.append(btn, el('span', 'muted', a.does));
-      box.append(row);
-    }
-    app.append(box);
-  }
-  app.append(el('p', 'muted small', source === 'cache' ? 'Screen loaded from this computer.' : source === 'generated' ? 'Screen designed just now and saved for next time.' : 'Simple screen shown.'));
+  const results = el('div');
+  app.append(
+    renderRecipe(recipe, async () => {
+      // STUB (M4): the Runner is not built yet, so nothing is sent to the AI and no result is shown.
+      results.replaceChildren(el('p', 'notice', 'Your answers look good. Running helpers arrives in the next version of Plugboard, so nothing was sent yet.'));
+      results.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }),
+    results,
+    el('p', 'muted small', source === 'cache' ? 'Screen loaded from this computer.' : source === 'generated' ? 'Screen designed just now and saved for next time.' : 'Simple screen shown.'),
+  );
 }
 
 async function openTool(id) {
   app.replaceChildren(el('p', 'status', 'Getting this helper ready… The first time can take a minute or two. After that it opens instantly.'));
   try {
-    renderRecipe(await getJson('/api/recipe?id=' + encodeURIComponent(id)));
+    showTool(await getJson('/api/recipe?id=' + encodeURIComponent(id)));
   } catch (err) {
     showError(err.message);
   }

@@ -38,6 +38,7 @@ test('serves the list screen', async () => {
   assert.equal(r.status, 200);
   assert.match(r.body, /<title>Plugboard<\/title>/);
   assert.equal((await get('/app.js')).status, 200);
+  assert.match((await get('/dev/')).body, /Component test page/);
 });
 
 test('refuses requests that come through another hostname', async () => {
