@@ -2,7 +2,8 @@
 // Starts Plugboard and opens it in the browser.
 import { spawn } from 'node:child_process';
 import type { AddressInfo } from 'node:net';
-import { createApp } from './server.ts';
+import { createApp, OLD_DATA } from './server.ts';
+import { defaultDataDir, copyOldData } from './paths.ts';
 
 const args = process.argv.slice(2);
 const portArg = args.indexOf('--port');
@@ -19,7 +20,14 @@ function openBrowser(url: string) {
   child.unref();
 }
 
-const server = createApp();
+const dataDir = defaultDataDir();
+try {
+  if (copyOldData(OLD_DATA, dataDir)) console.log(`Moved your saved records to ${dataDir} (the old copy was left where it was).`);
+} catch (err) {
+  console.error(`Could not copy your old saved records to ${dataDir}: ${(err as Error).message}`);
+}
+
+const server = createApp({ dataDir });
 function listen(port: number) {
   server.listen(port, '127.0.0.1');
 }
@@ -30,7 +38,7 @@ server.on('error', (err: NodeJS.ErrnoException) => {
 });
 server.on('listening', () => {
   const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  console.log(`\nPlugboard is running.\nOpen this link in your browser if it did not open by itself: ${url}\nTo stop Plugboard, close this window or press Ctrl+C.\n`);
+  console.log(`\nPlugboard is running.\nOpen this link in your browser if it did not open by itself: ${url}\nYour saved records are kept in: ${dataDir}\nTo stop Plugboard, close this window or press Ctrl+C.\n`);
   if (!noOpen) openBrowser(url);
 });
 listen(wanted);

@@ -8,12 +8,14 @@ import { getRecipe, type GeneratorDeps } from './generator.ts';
 import { getStatus, startInstall, startSignin, sendSigninCode } from './setup.ts';
 import { runAction, type Adapter, type RunResult } from './runner.ts';
 import { Store, recordLabel } from './store.ts';
+import { defaultDataDir } from './paths.ts';
 import { resolvePicks, toRecord, recordsTable, recordsForPrompt } from './records.ts';
 // @ts-ignore - plain JS shared with the browser, so the page and the server check answers the same way
 import { validateValues } from '../public/renderer.js';
 
 const PUBLIC = fileURLToPath(new URL('../public/', import.meta.url));
-const DATA = fileURLToPath(new URL('../data/', import.meta.url));
+/** Where data lived before it moved to Documents/Plugboard (copied over once by the CLI). */
+export const OLD_DATA = fileURLToPath(new URL('../data/', import.meta.url));
 const EXAMPLES = fileURLToPath(new URL('../examples/', import.meta.url));
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -76,10 +78,14 @@ const COLLECTION = /^[a-z][a-z0-9_]{0,39}$/;
 
 const stores = new Map<string, Store>();
 function storeFor(opts: Options): Store {
-  const dir = opts.dataDir ?? DATA;
+  const dir = dataDir(opts);
   let s = stores.get(dir);
   if (!s) stores.set(dir, (s = new Store(join(dir, 'plugboard.db'))));
   return s;
+}
+
+function dataDir(opts: Options): string {
+  return opts.dataDir ?? defaultDataDir();
 }
 
 /** The user's helpers plus Plugboard's examples ("" turns examples off, for tests). */
@@ -103,7 +109,7 @@ function resultForRecord(r: RunResult): unknown {
 async function run(req: IncomingMessage, res: ServerResponse, body: any, opts: Options) {
   const item = await findHelper(opts, body?.id);
   if (!item) return json(res, 404, { error: GONE });
-  const { recipe } = await getRecipe(item, { dataDir: opts.dataDir ?? DATA, ask: opts.ask });
+  const { recipe } = await getRecipe(item, { dataDir: dataDir(opts), ask: opts.ask });
   const screen = recipe.screens.find((s) => s.id === body.screenId);
   const action = screen?.actions.find((a) => a.id === body.actionId);
   if (!screen || !action) return json(res, 409, { error: 'This screen has changed. Please refresh the page and try again.' });
@@ -184,6 +190,8 @@ export function createApp(opts: Options = {}) {
 
       if (url.pathname === '/api/setup/status') return json(res, 200, await getStatus());
 
+      if (url.pathname === '/api/info') return json(res, 200, { dataDir: dataDir(opts) });
+
       if (url.pathname === '/api/plugins') return json(res, 200, { items: await helpers(opts) });
 
       if (url.pathname === '/api/records') {
@@ -197,7 +205,7 @@ export function createApp(opts: Options = {}) {
       if (url.pathname === '/api/recipe') {
         const item = (await helpers(opts)).find((i) => i.id === url.searchParams.get('id'));
         if (!item) return json(res, 404, { error: "This helper isn't on this computer any more. Go back and pick another one." });
-        return json(res, 200, { item, ...(await getRecipe(item, { dataDir: opts.dataDir ?? DATA, ask: opts.ask })) });
+        return json(res, 200, { item, ...(await getRecipe(item, { dataDir: dataDir(opts), ask: opts.ask })) });
       }
 
       const rel = decodeURIComponent(url.pathname.slice(1)) + (url.pathname.endsWith('/') ? 'index.html' : '');

@@ -289,6 +289,8 @@ async function route() {
     const connected = status.installed && status.signedIn;
     if (m) return connected ? openTool(decodeURIComponent(m[1])) : poll(location.hash);
     renderList((await getJson('/api/plugins')).items, connected);
+    const { dataDir } = await getJson('/api/info').catch(() => ({}));
+    if (dataDir) app.append(el('p', 'muted small footer-note', `Your saved records are kept on this computer in: ${dataDir}. Back up this folder to keep them safe.`));
   } catch (err) {
     showError(err.message);
   }
