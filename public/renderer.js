@@ -54,7 +54,93 @@ export function fileProblem(name, size) {
   return null;
 }
 
+/**
+ * Splits AI text into simple blocks: headings, paragraphs, bullet/numbered lists and tables.
+ * Only these shapes are recognised; anything else stays plain text. Nothing is ever treated as HTML.
+ */
+export function parseMarkdown(text) {
+  const blocks = [];
+  const lines = String(text).replace(/\r\n?/g, '\n').split('\n');
+  let para = [];
+  const flush = () => {
+    if (para.length) blocks.push({ type: 'p', text: para.join('\n') });
+    para = [];
+  };
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const h = /^(#{1,6})\s+(.*)$/.exec(line);
+    const li = /^\s*([-*•]|\d+[.)])\s+(.*)$/.exec(line);
+    if (!line.trim()) flush();
+    else if (h) {
+      flush();
+      blocks.push({ type: 'h', text: h[2].replace(/\s+#+\s*$/, '') });
+    } else if (/^\s*\|.*\|\s*$/.test(line)) {
+      flush();
+      const rows = [];
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) {
+        const cells = lines[i].trim().slice(1, -1).split('|').map((c) => c.trim());
+        if (!cells.every((c) => /^:?-{2,}:?$/.test(c))) rows.push(cells);
+        i++;
+      }
+      i--;
+      blocks.push({ type: 'table', rows });
+    } else if (li) {
+      flush();
+      const ordered = /\d/.test(li[1]);
+      const last = blocks[blocks.length - 1];
+      if (last && last.type === 'list' && last.ordered === ordered) last.items.push(li[2]);
+      else blocks.push({ type: 'list', ordered, items: [li[2]] });
+    } else if (/^\s*(---+|\*\*\*+)\s*$/.test(line)) flush();
+    else para.push(line);
+  }
+  flush();
+  return blocks;
+}
+
+/** Splits a line into plain, **bold** and `code` pieces. */
+export function parseInline(text) {
+  return String(text)
+    .split(/(\*\*[^*]+\*\*|`[^`]+`)/)
+    .filter(Boolean)
+    .map((part) => (/^\*\*.+\*\*$/.test(part) ? { b: part.slice(2, -2) } : /^`.+`$/.test(part) ? { code: part.slice(1, -1) } : { t: part }));
+}
+
 // ---------- DOM ----------
+
+function inline(node, text) {
+  for (const piece of parseInline(text)) node.append(piece.b != null ? el('strong', null, piece.b) : piece.code != null ? el('code', null, piece.code) : document.createTextNode(piece.t));
+  return node;
+}
+
+/** Shows AI text with simple formatting, built element by element (never innerHTML). */
+export function renderMarkdown(text) {
+  const box = el('div', 'result-text formatted');
+  for (const b of parseMarkdown(text)) {
+    if (b.type === 'h') box.append(inline(el('h4'), b.text));
+    else if (b.type === 'p') box.append(inline(el('p'), b.text));
+    else if (b.type === 'list') {
+      const list = el(b.ordered ? 'ol' : 'ul');
+      for (const it of b.items) list.append(inline(el('li'), it));
+      box.append(list);
+    } else if (b.type === 'table' && b.rows.length) {
+      const scroller = el('div', 'table-scroll');
+      const table = el('table', 'data');
+      const [head, ...rest] = b.rows;
+      const tr = el('tr');
+      for (const c of head) tr.append(inline(el('th'), c));
+      table.append(el('thead'), el('tbody'));
+      table.tHead.append(tr);
+      for (const r of rest) {
+        const row = el('tr');
+        for (const c of r) row.append(inline(el('td'), c));
+        table.tBodies[0].append(row);
+      }
+      scroller.append(table);
+      box.append(scroller);
+    }
+  }
+  return box;
+}
 
 let uid = 0;
 function el(tag, className, text) {
@@ -296,7 +382,9 @@ export function renderRecipe(recipe, onAction) {
     for (const action of screen.actions) {
       const btn = el('button', null, action.label);
       btn.type = 'button';
-      btn.title = action.does;
+      const desc = el('p', 'help', action.does);
+      desc.id = `a${++uid}`;
+      btn.setAttribute('aria-describedby', desc.id);
       btn.addEventListener('click', async () => {
         const vals = values();
         const errors = validateValues(screen, vals);
@@ -314,7 +402,9 @@ export function renderRecipe(recipe, onAction) {
           btn.disabled = false;
         }
       });
-      row.append(btn);
+      const itemBox = el('div', 'action-item');
+      itemBox.append(btn, desc);
+      row.append(itemBox);
     }
     panel.append(row);
     panels.push(panel);
@@ -354,6 +444,7 @@ export function renderResult(result) {
     box.append(el('p', null, result.text));
     return box;
   }
+  if (result.note) box.append(el('p', null, result.note));
 
   if (result.kind === 'table') {
     const scroller = el('div', 'table-scroll');
@@ -385,8 +476,7 @@ export function renderResult(result) {
     return box;
   }
 
-  const text = el('div', 'result-text');
-  text.textContent = result.text;
+  const text = renderMarkdown(result.text);
   const copy = el('button', 'secondary', 'Copy');
   copy.type = 'button';
   copy.addEventListener('click', async () => {

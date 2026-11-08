@@ -3,9 +3,10 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { join, extname, normalize, sep } from 'node:path';
-import { listPlugins } from './reader.ts';
+import { listPlugins, readInstructions } from './reader.ts';
 import { getRecipe, type GeneratorDeps } from './generator.ts';
 import { getStatus, startInstall, startSignin, sendSigninCode } from './setup.ts';
+import { runAction, type Adapter } from './runner.ts';
 
 const PUBLIC = fileURLToPath(new URL('../public/', import.meta.url));
 const DATA = fileURLToPath(new URL('../data/', import.meta.url));
@@ -24,6 +25,8 @@ export interface Options {
   dataDir?: string;
   /** Replaces the AI call; tests only. */
   ask?: GeneratorDeps['ask'];
+  /** Replaces the AI program used for runs; tests only. */
+  adapter?: Adapter;
 }
 
 function send(res: ServerResponse, status: number, type: string, body: string | Buffer) {
@@ -52,13 +55,36 @@ async function readBody(req: IncomingMessage): Promise<any> {
   let raw = '';
   for await (const chunk of req) {
     raw += chunk;
-    if (raw.length > 100_000) throw new Error('request body too large');
+    if (raw.length > 2_000_000) throw new Error('request body too large');
   }
   try {
     return raw ? JSON.parse(raw) : {};
   } catch {
     return {};
   }
+}
+
+/** Runs one button press and streams progress as one JSON object per line. */
+async function run(req: IncomingMessage, res: ServerResponse, body: any, opts: Options) {
+  const item = (await listPlugins(opts.claudeHome)).find((i) => i.id === body?.id);
+  if (!item) return json(res, 404, { error: "This helper isn't on this computer any more. Go back and pick another one." });
+  const { recipe } = await getRecipe(item, { dataDir: opts.dataDir ?? DATA, ask: opts.ask });
+  const screen = recipe.screens.find((s) => s.id === body.screenId);
+  const action = screen?.actions.find((a) => a.id === body.actionId);
+  if (!screen || !action) return json(res, 409, { error: 'This screen has changed. Please refresh the page and try again.' });
+  const values = body.values && typeof body.values === 'object' && !Array.isArray(body.values) ? body.values : {};
+
+  res.writeHead(200, { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+  const stop = new AbortController();
+  res.on('close', () => stop.abort()); // page closed or Stop pressed: stop the AI too
+  const line = (o: unknown) => res.writableEnded || res.write(JSON.stringify(o) + '\n');
+  line({ type: 'started' });
+  const result = await runAction(
+    { item, instructions: await readInstructions(item), screen, action, values },
+    { adapter: opts.adapter, signal: stop.signal, onProgress: (p) => line({ ...p, kind: p.type, type: 'progress' }) },
+  );
+  line({ type: 'result', result });
+  res.end();
 }
 
 export function createApp(opts: Options = {}) {
@@ -78,6 +104,7 @@ export function createApp(opts: Options = {}) {
           await startSignin();
           return json(res, 200, await getStatus());
         }
+        if (url.pathname === '/api/run') return run(req, res, body, opts);
         if (url.pathname === '/api/setup/code') {
           if (!sendSigninCode(String(body?.code ?? ''))) return json(res, 400, { error: "That code didn't work. Copy it again from the sign-in page and paste it here." });
           return json(res, 200, { ok: true });

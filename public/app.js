@@ -1,4 +1,4 @@
-import { renderRecipe } from './renderer.js';
+import { renderRecipe, renderResult } from './renderer.js';
 
 // Plugboard screens. Plugin text and AI recipes are untrusted: only ever set with textContent, never as HTML.
 const app = document.getElementById('app');
@@ -81,8 +81,59 @@ function renderList(items, connected) {
 
 // ---- Helper screen ----
 
+/** Sends one button press to the Runner and shows live progress, then the result. */
+async function runHelper(item, screen, action, values, results) {
+  const stop = new AbortController();
+  const box = el('section', 'panel result');
+  box.setAttribute('aria-live', 'polite');
+  const status = el('p', 'status', 'Claude is working on it… This can take a minute.');
+  const live = el('div', 'result-text');
+  const stopBtn = el('button', 'secondary', 'Stop');
+  stopBtn.type = 'button';
+  stopBtn.addEventListener('click', () => stop.abort());
+  box.append(el('h3', null, 'Working…'), status, live, stopBtn);
+  results.replaceChildren(box);
+  box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  let result = null;
+  try {
+    const res = await fetch('/api/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: item.id, screenId: screen.id, actionId: action.id, values }),
+      signal: stop.signal,
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Something went wrong. Please try again.');
+    }
+    const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+    let buf = '';
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += value;
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const l of lines) {
+        if (!l.trim()) continue;
+        const msg = JSON.parse(l);
+        if (msg.type === 'progress') {
+          if (msg.text) live.textContent += msg.text; // shown as plain text only
+          if (msg.chars) status.textContent = `Claude is writing… (${msg.chars.toLocaleString()} characters so far)`;
+        }
+        if (msg.type === 'result') result = msg.result;
+      }
+    }
+    if (!result) throw new Error('The answer was cut off. Please try again.');
+  } catch (err) {
+    result = { kind: 'error', text: stop.signal.aborted ? 'Stopped. Nothing else was done.' : err.message === 'Failed to fetch' ? "Plugboard isn't responding. Make sure it is still running, then try again." : err.message };
+  }
+  results.replaceChildren(renderResult(result));
+}
+
 function showTool(data) {
-  const { recipe, source, notice } = data;
+  const { item, recipe, source, notice } = data;
   app.replaceChildren();
   const back = el('a', 'back', '← All helpers');
   back.href = '#';
@@ -90,11 +141,7 @@ function showTool(data) {
   if (notice) app.append(el('p', 'notice', notice));
   const results = el('div');
   app.append(
-    renderRecipe(recipe, async () => {
-      // STUB (M4): the Runner is not built yet, so nothing is sent to the AI and no result is shown.
-      results.replaceChildren(el('p', 'notice', 'Your answers look good. Running helpers arrives in the next version of Plugboard, so nothing was sent yet.'));
-      results.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }),
+    renderRecipe(recipe, (screen, action, values) => runHelper(item, screen, action, values, results)),
     results,
     el('p', 'muted small', source === 'cache' ? 'Screen loaded from this computer.' : source === 'generated' ? 'Screen designed just now and saved for next time.' : 'Simple screen shown.'),
   );

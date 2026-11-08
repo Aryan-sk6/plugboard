@@ -119,3 +119,12 @@ pre.result-text { font: 0.9rem/1.5 ui-monospace, Consolas, monospace; background
 dialog.confirm { border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--text); max-width: min(480px, calc(100vw - 32px)); padding: 24px; }
 dialog.confirm::backdrop { background: rgb(0 0 0 / 0.45); }
 dialog.confirm h3 { margin-top: 0; }
+.formatted { white-space: normal; }
+.formatted h4 { font-size: 1.05rem; margin: 18px 0 6px; }
+.formatted h4:first-child { margin-top: 0; }
+.formatted p { margin: 0 0 10px; white-space: pre-wrap; }
+.formatted ul, .formatted ol { margin: 0 0 12px; padding-left: 22px; }
+.formatted li { margin: 4px 0; }
+.formatted code { font-family: ui-monospace, Consolas, monospace; font-size: 0.9em; background: var(--bg); padding: 1px 5px; border-radius: 4px; }
+.formatted .table-scroll { margin: 8px 0 14px; }
+.action-item { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; max-width: 360px; }

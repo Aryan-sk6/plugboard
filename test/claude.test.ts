@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { mkdtemp, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { askClaude, findClaude, NOT_FOUND, NOT_SIGNED_IN } from '../src/claude.ts';
+import { askClaude, findClaude, claudeArgs, NOT_FOUND, NOT_SIGNED_IN, STOPPED, type Progress } from '../src/claude.ts';
 
 const FAKE = fileURLToPath(new URL('./fake-claude.mjs', import.meta.url));
 
@@ -63,4 +63,23 @@ test('resolves a Windows npm .cmd shim to its real target', async () => {
   await writeFile(join(dir, 'claude.cmd'), '@ECHO off\r\nendLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\node_modules\\pkg\\cli.js" %*\r\n');
   const found = await withEnv({ PLUGBOARD_CLAUDE_PATH: join(dir, 'claude.cmd') }, () => findClaude());
   assert.deepEqual(found, { cmd: process.execPath, args: [join(dir, 'node_modules', 'pkg', 'cli.js')] });
+});
+
+test('streaming mode reports live text and progress, then the final result', async () => {
+  const seen: Progress[] = [];
+  const r = await withEnv({ PLUGBOARD_CLAUDE_PATH: FAKE, FAKE_MODE: 'stream' }, () => askClaude({ ...opts, onProgress: (p) => seen.push(p) }));
+  assert.deepEqual(r, { ok: true, text: 'Hello there', structured: undefined });
+  assert.deepEqual(seen, [{ type: 'text', text: 'Hello ' }, { type: 'text', text: 'there' }, { type: 'working', chars: 5 }]);
+});
+
+test('streaming uses stream-json with --verbose and partial messages', () => {
+  const args = claudeArgs({ ...opts, onProgress: () => {} });
+  assert.equal(args[args.indexOf('--output-format') + 1], 'stream-json');
+  assert.ok(args.includes('--verbose') && args.includes('--include-partial-messages'));
+});
+
+test('Stop kills the CLI and says so plainly', async () => {
+  const stop = new AbortController();
+  const r = await withEnv({ PLUGBOARD_CLAUDE_PATH: FAKE, FAKE_MODE: 'streamhang' }, () => askClaude({ ...opts, signal: stop.signal, onProgress: () => stop.abort() }));
+  assert.deepEqual(r, { ok: false, message: STOPPED });
 });

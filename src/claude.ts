@@ -9,15 +9,23 @@ export type CliResult =
   | { ok: true; text: string; structured?: unknown }
   | { ok: false; message: string };
 
+/** Live progress while the AI works: answer text as it arrives, or a character count for structured answers. */
+export type Progress = { type: 'text'; text: string } | { type: 'working'; chars: number };
+
 export interface AskOptions {
   system: string;
   prompt: string;
   schema?: object;
   timeoutMs?: number;
+  /** When set, output is streamed and progress is reported. */
+  onProgress?: (p: Progress) => void;
+  /** Aborting stops the CLI. */
+  signal?: AbortSignal;
 }
 
 export const NOT_FOUND = "Claude isn't set up on this computer yet. Go to Connect Claude to set it up.";
 export const NOT_SIGNED_IN = "Claude isn't signed in. Go to Connect Claude to sign in.";
+export const STOPPED = 'Stopped. Nothing else was done.';
 
 async function exists(p: string): Promise<boolean> {
   try {
@@ -61,7 +69,7 @@ export async function findClaude(): Promise<{ cmd: string; args: string[] } | nu
 export function claudeArgs(opts: AskOptions): string[] {
   const args = [
     '-p',
-    '--output-format', 'json',
+    ...(opts.onProgress ? ['--output-format', 'stream-json', '--verbose', '--include-partial-messages'] : ['--output-format', 'json']),
     '--safe-mode',
     '--tools', '',
     '--strict-mcp-config',
@@ -78,8 +86,18 @@ function friendlyError(text: string): string {
   return `Claude couldn't finish this request. Claude said: ${text.slice(0, 400)}`;
 }
 
+/** Reads the CLI's final result object (same shape in json and stream-json modes). */
+function fromResult(data: any): CliResult {
+  // A failed call can still say subtype "success", so is_error is the field to trust.
+  if (data.is_error || (typeof data.subtype === 'string' && data.subtype.startsWith('error'))) {
+    return { ok: false, message: friendlyError(String(data.result ?? data.subtype ?? 'unknown error')) };
+  }
+  return { ok: true, text: String(data.result ?? ''), structured: data.structured_output };
+}
+
 /** Sends one request to Claude. The prompt goes through stdin (Windows limits command lines to ~32k characters). */
 export async function askClaude(opts: AskOptions): Promise<CliResult> {
+  if (opts.signal?.aborted) return { ok: false, message: STOPPED };
   const found = await findClaude();
   if (!found) return { ok: false, message: NOT_FOUND };
   const timeoutMs = opts.timeoutMs ?? 5 * 60_000;
@@ -87,36 +105,68 @@ export async function askClaude(opts: AskOptions): Promise<CliResult> {
   return new Promise((resolve) => {
     let stdout = '';
     let stderr = '';
-    let timedOut = false;
+    let pending = ''; // partial line in streaming mode
+    let final: CliResult | null = null;
+    let jsonChars = 0;
+    let why: 'timeout' | 'stopped' | null = null;
     // Neutral working folder so no project files (CLAUDE.md etc.) get picked up.
     const child = spawn(found.cmd, [...found.args, ...claudeArgs(opts)], { cwd: tmpdir(), stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
-    const timer = setTimeout(() => {
-      timedOut = true;
+    const stop = (reason: 'timeout' | 'stopped') => {
+      why = reason;
       child.kill();
-    }, timeoutMs);
-    child.stdout.on('data', (c) => (stdout += c));
-    child.stderr.on('data', (c) => (stderr += c));
-    child.stdin.on('error', () => {}); // child may exit before reading stdin; the close handler reports it
-    child.on('error', (err: NodeJS.ErrnoException) => {
-      clearTimeout(timer);
-      resolve({ ok: false, message: err.code === 'ENOENT' ? NOT_FOUND : `Plugboard couldn't start Claude: ${err.message}` });
-    });
-    child.on('close', (code) => {
-      clearTimeout(timer);
-      if (timedOut) return resolve({ ok: false, message: `Claude took too long to answer (over ${Math.round(timeoutMs / 60_000)} minutes). Please try again.` });
-      let data: any;
+    };
+    const timer = setTimeout(() => stop('timeout'), timeoutMs);
+    const onAbort = () => stop('stopped');
+    opts.signal?.addEventListener('abort', onAbort);
+
+    // Streaming lines are parsed but never logged: the result line carries account details.
+    const onLine = (line: string) => {
+      if (!line.trim()) return;
+      let d: any;
       try {
-        data = JSON.parse(stdout);
+        d = JSON.parse(line);
       } catch {
-        if (stderr.trim()) console.error('[claude stderr]', stderr.trim().slice(0, 2000));
-        const hint = /not logged in|login/i.test(stdout + stderr) ? NOT_SIGNED_IN : `Claude stopped unexpectedly (code ${code}). Please try again.`;
-        return resolve({ ok: false, message: hint });
+        return;
       }
-      // A failed call can still say subtype "success", so is_error is the field to trust.
-      if (data.is_error || (typeof data.subtype === 'string' && data.subtype.startsWith('error'))) {
-        return resolve({ ok: false, message: friendlyError(String(data.result ?? data.subtype ?? 'unknown error')) });
+      if (d.type === 'result') final = fromResult(d);
+      const delta = d.type === 'stream_event' && d.event?.type === 'content_block_delta' ? d.event.delta : null;
+      if (delta?.type === 'text_delta' && typeof delta.text === 'string') opts.onProgress?.({ type: 'text', text: delta.text });
+      if (delta?.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
+        jsonChars += delta.partial_json.length;
+        opts.onProgress?.({ type: 'working', chars: jsonChars });
       }
-      resolve({ ok: true, text: String(data.result ?? ''), structured: data.structured_output });
+    };
+
+    child.stdout.on('data', (c) => {
+      if (!opts.onProgress) return void (stdout += c);
+      const lines = (pending + c).split('\n');
+      pending = lines.pop() ?? '';
+      lines.forEach(onLine);
+    });
+    child.stderr.on('data', (c) => (stderr = (stderr + c).slice(-4000)));
+    child.stdin.on('error', () => {}); // child may exit before reading stdin; the close handler reports it
+    const finish = (r: CliResult) => {
+      clearTimeout(timer);
+      opts.signal?.removeEventListener('abort', onAbort);
+      resolve(r);
+    };
+    child.on('error', (err: NodeJS.ErrnoException) => finish({ ok: false, message: err.code === 'ENOENT' ? NOT_FOUND : `Plugboard couldn't start Claude: ${err.message}` }));
+    child.on('close', (code) => {
+      if (why === 'stopped') return finish({ ok: false, message: STOPPED });
+      if (why === 'timeout') return finish({ ok: false, message: `Claude took too long to answer (over ${Math.round(timeoutMs / 60_000)} minutes). Please try again.` });
+      if (opts.onProgress) {
+        onLine(pending);
+        if (final) return finish(final);
+      } else {
+        try {
+          return finish(fromResult(JSON.parse(stdout)));
+        } catch {
+          // fall through
+        }
+      }
+      if (stderr.trim()) console.error('[claude stderr]', stderr.trim().slice(0, 2000));
+      const hint = /not logged in|login/i.test(stdout + stderr) ? NOT_SIGNED_IN : `Claude stopped unexpectedly (code ${code}). Please try again.`;
+      finish({ ok: false, message: hint });
     });
     child.stdin.end(opts.prompt);
   });

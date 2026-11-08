@@ -57,3 +57,19 @@ test('only small text files are accepted', () => {
   assert.match(fileProblem('photo.png', 100), /text files only/);
   assert.match(fileProblem('big.txt', MAX_FILE_BYTES + 1), /too big/);
 });
+
+test('AI text is split into simple blocks; HTML stays plain text', async () => {
+  // @ts-ignore - plain browser JS module
+  const { parseMarkdown, parseInline } = await import('../public/renderer.js');
+  const md = '# Title\n\nShort **version** here.\nSecond line.\n\n- one\n- two\n1. first\n\n| A | B |\n|---|---|\n| 1 | 2 |\n\n---\n<script>alert(1)</script>';
+  assert.deepEqual(parseMarkdown(md), [
+    { type: 'h', text: 'Title' },
+    { type: 'p', text: 'Short **version** here.\nSecond line.' },
+    { type: 'list', ordered: false, items: ['one', 'two'] },
+    { type: 'list', ordered: true, items: ['first'] },
+    { type: 'table', rows: [['A', 'B'], ['1', '2']] },
+    { type: 'p', text: '<script>alert(1)</script>' },
+  ]);
+  assert.deepEqual(parseInline('a **b** `c` d'), [{ t: 'a ' }, { b: 'b' }, { t: ' ' }, { code: 'c' }, { t: ' d' }]);
+  assert.deepEqual(parseInline('5 * 3 = 15'), [{ t: '5 * 3 = 15' }]);
+});

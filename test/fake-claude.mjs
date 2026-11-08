@@ -31,5 +31,21 @@ process.stdin.on('end', () => {
   if (mode === 'limit') return out({ is_error: true, result: 'You have hit your usage limit. Resets at 5pm.' });
   if (mode === 'garbage') return process.stdout.write('this is not json');
   if (mode === 'hang') return setTimeout(() => {}, 60_000);
+  const line = (o) => process.stdout.write(JSON.stringify(o) + '\n');
+  const delta = (d) => line({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: d } });
+  if (mode === 'stream') {
+    line({ type: 'system', subtype: 'init' });
+    delta({ type: 'text_delta', text: 'Hello ' });
+    delta({ type: 'text_delta', text: 'there' });
+    delta({ type: 'input_json_delta', partial_json: '{"a":' });
+    // the result line arrives in two pieces, to test line buffering
+    const r = JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: 'Hello there', credential_expires_at: 'x' });
+    process.stdout.write(r.slice(0, 10));
+    return setTimeout(() => process.stdout.write(r.slice(10) + '\n'), 50);
+  }
+  if (mode === 'streamhang') {
+    delta({ type: 'text_delta', text: 'partial' });
+    return setTimeout(() => {}, 60_000);
+  }
 });
 }
