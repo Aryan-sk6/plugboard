@@ -16,8 +16,8 @@ export interface AskOptions {
   timeoutMs?: number;
 }
 
-export const NOT_FOUND = "Plugboard couldn't find Claude on this computer. Install Claude Code (see the README), then try again.";
-export const NOT_SIGNED_IN = "Claude isn't signed in yet. Open a terminal, type claude, press Enter and follow the steps to sign in. Then try again.";
+export const NOT_FOUND = "Claude isn't set up on this computer yet. Go to Connect Claude to set it up.";
+export const NOT_SIGNED_IN = "Claude isn't signed in. Go to Connect Claude to sign in.";
 
 async function exists(p: string): Promise<boolean> {
   try {

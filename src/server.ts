@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { join, extname, normalize, sep } from 'node:path';
 import { listPlugins } from './reader.ts';
 import { getRecipe, type GeneratorDeps } from './generator.ts';
+import { getStatus, startInstall, startSignin, sendSigninCode } from './setup.ts';
 
 const PUBLIC = fileURLToPath(new URL('../public/', import.meta.url));
 const DATA = fileURLToPath(new URL('../data/', import.meta.url));
@@ -40,12 +41,52 @@ function hostOk(req: IncomingMessage): boolean {
   return host === '127.0.0.1' || host === 'localhost' || host === '[::1]';
 }
 
+// Actions must come from Plugboard's own page: JSON body (other sites' plain forms can't send it) and a matching Origin.
+function sameSite(req: IncomingMessage): boolean {
+  if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) return false;
+  const origin = req.headers.origin;
+  return origin === undefined || origin === `http://${req.headers.host}`;
+}
+
+async function readBody(req: IncomingMessage): Promise<any> {
+  let raw = '';
+  for await (const chunk of req) {
+    raw += chunk;
+    if (raw.length > 100_000) throw new Error('request body too large');
+  }
+  try {
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
 export function createApp(opts: Options = {}) {
   return createServer(async (req, res) => {
     try {
       if (!hostOk(req)) return send(res, 403, 'text/plain', 'Forbidden');
       const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+
+      if (req.method === 'POST') {
+        if (!sameSite(req)) return json(res, 403, { error: 'Not allowed.' });
+        const body = await readBody(req);
+        if (url.pathname === '/api/setup/install') {
+          startInstall();
+          return json(res, 200, await getStatus());
+        }
+        if (url.pathname === '/api/setup/signin') {
+          await startSignin();
+          return json(res, 200, await getStatus());
+        }
+        if (url.pathname === '/api/setup/code') {
+          if (!sendSigninCode(String(body?.code ?? ''))) return json(res, 400, { error: "That code didn't work. Copy it again from the sign-in page and paste it here." });
+          return json(res, 200, { ok: true });
+        }
+        return json(res, 404, { error: 'Not found.' });
+      }
       if (req.method !== 'GET') return json(res, 405, { error: 'Not allowed.' });
+
+      if (url.pathname === '/api/setup/status') return json(res, 200, await getStatus());
 
       if (url.pathname === '/api/plugins') return json(res, 200, { items: await listPlugins(opts.claudeHome) });
 

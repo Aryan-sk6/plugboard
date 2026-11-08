@@ -14,9 +14,9 @@ await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
 const port = (server.address() as AddressInfo).port;
 after(() => server.close());
 
-function get(path: string, host = `127.0.0.1:${port}`, method = 'GET'): Promise<{ status: number; type: string; body: string }> {
+function get(path: string, host = `127.0.0.1:${port}`, method = 'GET', extra: Record<string, string> = {}): Promise<{ status: number; type: string; body: string }> {
   return new Promise((resolve, reject) => {
-    const req = request({ host: '127.0.0.1', port, path, method, headers: { host } }, (res) => {
+    const req = request({ host: '127.0.0.1', port, path, method, headers: { host, ...extra } }, (res) => {
       let body = '';
       res.on('data', (c) => (body += c));
       res.on('end', () => resolve({ status: res.statusCode!, type: String(res.headers['content-type']), body }));
@@ -51,8 +51,13 @@ test('does not serve files outside the public folder', async () => {
   assert.equal((await get('/%2e%2e%2fsrc%2fserver.ts')).status, 404);
 });
 
-test('rejects non-GET requests for now', async () => {
-  assert.equal((await get('/api/plugins', undefined, 'POST')).status, 405);
+test('actions only accept JSON from Plugboard itself', async () => {
+  const host = `127.0.0.1:${port}`;
+  assert.equal((await get('/api/setup/install', host, 'POST')).status, 403, 'plain form post from another site');
+  assert.equal((await get('/api/setup/install', host, 'POST', { 'content-type': 'text/plain' })).status, 403);
+  assert.equal((await get('/api/setup/install', host, 'POST', { 'content-type': 'application/json', origin: 'https://evil.example' })).status, 403);
+  assert.equal((await get('/api/nope', host, 'POST', { 'content-type': 'application/json', origin: `http://${host}` })).status, 404);
+  assert.equal((await get('/api/plugins', host, 'DELETE')).status, 405);
 });
 
 test('recipe endpoint returns a recipe for a known helper and a plain 404 otherwise', async () => {

@@ -1,4 +1,25 @@
 // TEST DOUBLE ONLY: imitates the claude CLI's -p --output-format json reply. Never used outside tests.
+import { readFileSync, writeFileSync } from 'node:fs';
+
+// Sign-in state lives in a temp file named by FAKE_STATE ("1" = signed in).
+const argv = process.argv.slice(2);
+const signedIn = () => { try { return readFileSync(process.env.FAKE_STATE, 'utf8') === '1'; } catch { return false; } };
+if (argv[0] === 'auth' && argv[1] === 'status') {
+  process.stdout.write(JSON.stringify({ loggedIn: signedIn(), authMethod: signedIn() ? 'claude.ai' : 'none', configDirectory: '/x' }));
+  process.exit(signedIn() ? 0 : 1);
+}
+if (argv[0] === 'auth' && argv[1] === 'login') {
+  process.stdout.write('Opening browser to sign in…\nIf the browser didn\'t open, visit: https://claude.ai/oauth/authorize?code=true&state=abc\n');
+  if (process.env.FAKE_LOGIN === 'code') {
+    process.stdout.write('Paste code here if prompted > ');
+    process.stdin.once('data', (c) => {
+      writeFileSync(process.env.FAKE_STATE, String(c).trim() === 'good-code' ? '1' : '0');
+      process.exit(String(c).trim() === 'good-code' ? 0 : 1);
+    });
+  } else {
+    setTimeout(() => { writeFileSync(process.env.FAKE_STATE, '1'); process.exit(0); }, 300);
+  }
+} else {
 let stdin = '';
 process.stdin.on('data', (c) => (stdin += c));
 process.stdin.on('end', () => {
@@ -11,3 +32,4 @@ process.stdin.on('end', () => {
   if (mode === 'garbage') return process.stdout.write('this is not json');
   if (mode === 'hang') return setTimeout(() => {}, 60_000);
 });
+}
