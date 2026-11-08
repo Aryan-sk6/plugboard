@@ -123,6 +123,11 @@ async function scanPlugins(home: string): Promise<PluginItem[]> {
   return results.flat();
 }
 
+/** The instruction text of one skill or command. */
+export async function readInstructions(item: PluginItem): Promise<string> {
+  return (await readFile(item.file, 'utf8')).replace(/\r\n?/g, '\n');
+}
+
 /** Every skill and command Claude Code would load for this user. */
 export async function listPlugins(home = claudeHome()): Promise<PluginItem[]> {
   const [own, plugins] = await Promise.all([scanFolder(home, 'Your skills', 'Your commands', 'user'), scanPlugins(home)]);

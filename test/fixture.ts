@@ -35,3 +35,23 @@ export async function makeClaudeHome(): Promise<string> {
   await put(join(home, 'settings.json'), JSON.stringify({ enabledPlugins: { 'off@shop': false } }));
   return home;
 }
+
+/** A valid screen recipe used across tests. */
+export function goodRecipe(): any {
+  return {
+    version: 1,
+    title: 'Invoice maker',
+    summary: 'Makes an invoice.',
+    screens: [{
+      id: 'main',
+      title: 'New invoice',
+      fields: [
+        { id: 'customer', label: 'Customer name', type: 'text', required: true },
+        { id: 'due', label: 'Due date', type: 'date', required: false },
+        { id: 'currency', label: 'Currency', type: 'dropdown', required: true, options: ['USD', 'EUR'] },
+        { id: 'lines', label: 'Items', type: 'table', required: true, columns: [{ id: 'item', label: 'Item', type: 'text' }, { id: 'price', label: 'Price', type: 'number' }] },
+      ],
+      actions: [{ id: 'make', label: 'Make invoice', does: 'Creates the invoice text.', output: 'text', writesFiles: false, sendsMessages: false }],
+    }],
+  };
+}

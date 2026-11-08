@@ -4,8 +4,10 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { join, extname, normalize, sep } from 'node:path';
 import { listPlugins } from './reader.ts';
+import { getRecipe, type GeneratorDeps } from './generator.ts';
 
 const PUBLIC = fileURLToPath(new URL('../public/', import.meta.url));
+const DATA = fileURLToPath(new URL('../data/', import.meta.url));
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -17,6 +19,10 @@ const TYPES: Record<string, string> = {
 export interface Options {
   /** Claude config folder to read. Defaults to the user's real one. */
   claudeHome?: string;
+  /** Plugboard's own data folder (recipe cache, later the database). */
+  dataDir?: string;
+  /** Replaces the AI call; tests only. */
+  ask?: GeneratorDeps['ask'];
 }
 
 function send(res: ServerResponse, status: number, type: string, body: string | Buffer) {
@@ -42,6 +48,12 @@ export function createApp(opts: Options = {}) {
       if (req.method !== 'GET') return json(res, 405, { error: 'Not allowed.' });
 
       if (url.pathname === '/api/plugins') return json(res, 200, { items: await listPlugins(opts.claudeHome) });
+
+      if (url.pathname === '/api/recipe') {
+        const item = (await listPlugins(opts.claudeHome)).find((i) => i.id === url.searchParams.get('id'));
+        if (!item) return json(res, 404, { error: "This helper isn't on this computer any more. Go back and pick another one." });
+        return json(res, 200, { item, ...(await getRecipe(item, { dataDir: opts.dataDir ?? DATA, ask: opts.ask })) });
+      }
 
       const rel = url.pathname === '/' ? 'index.html' : decodeURIComponent(url.pathname.slice(1));
       const file = normalize(join(PUBLIC, rel));
