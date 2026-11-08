@@ -1,0 +1,59 @@
+// Local web server. Listens on 127.0.0.1 only, so nothing outside this computer can reach it.
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { join, extname, normalize, sep } from 'node:path';
+import { listPlugins } from './reader.ts';
+
+const PUBLIC = fileURLToPath(new URL('../public/', import.meta.url));
+const TYPES: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+};
+
+export interface Options {
+  /** Claude config folder to read. Defaults to the user's real one. */
+  claudeHome?: string;
+}
+
+function send(res: ServerResponse, status: number, type: string, body: string | Buffer) {
+  res.writeHead(status, { 'Content-Type': type, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+  res.end(body);
+}
+
+function json(res: ServerResponse, status: number, data: unknown) {
+  send(res, status, 'application/json; charset=utf-8', JSON.stringify(data));
+}
+
+// Blocks other websites from reaching us through a fake domain that points at 127.0.0.1 (DNS rebinding).
+function hostOk(req: IncomingMessage): boolean {
+  const host = (req.headers.host ?? '').replace(/:\d+$/, '');
+  return host === '127.0.0.1' || host === 'localhost' || host === '[::1]';
+}
+
+export function createApp(opts: Options = {}) {
+  return createServer(async (req, res) => {
+    try {
+      if (!hostOk(req)) return send(res, 403, 'text/plain', 'Forbidden');
+      const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+      if (req.method !== 'GET') return json(res, 405, { error: 'Not allowed.' });
+
+      if (url.pathname === '/api/plugins') return json(res, 200, { items: await listPlugins(opts.claudeHome) });
+
+      const rel = url.pathname === '/' ? 'index.html' : decodeURIComponent(url.pathname.slice(1));
+      const file = normalize(join(PUBLIC, rel));
+      if (!file.startsWith(PUBLIC.endsWith(sep) ? PUBLIC : PUBLIC + sep)) return send(res, 404, 'text/plain', 'Not found');
+      try {
+        return send(res, 200, TYPES[extname(file)] ?? 'application/octet-stream', await readFile(file));
+      } catch {
+        return send(res, 404, 'text/plain', 'Not found');
+      }
+    } catch (err) {
+      console.error(err); // details stay in the terminal; the browser gets a plain message
+      json(res, 500, { error: 'Something went wrong on this computer. Try again, or restart Plugboard.' });
+    }
+  });
+}
