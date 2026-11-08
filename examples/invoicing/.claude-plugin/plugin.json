@@ -1,0 +1,6 @@
+{
+  "name": "invoicing",
+  "version": "0.1.0",
+  "description": "Create simple, printable invoices and keep a record of the ones you have sent.",
+  "license": "MIT"
+}

@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { readdir, readFile, stat, mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { listPlugins, parseFrontmatter } from '../src/reader.ts';
 import { makeClaudeHome } from './fixture.ts';
 
@@ -58,6 +59,19 @@ test('listPlugins never changes, adds or removes anything in the config folder',
   await listPlugins(home);
   await listPlugins(home);
   assert.deepEqual(await snapshot(home), before);
+});
+
+test('finds the 3 shipped business examples, listed first', async () => {
+  const home = await makeClaudeHome();
+  const items = await listPlugins(home, fileURLToPath(new URL('../examples/', import.meta.url)));
+  const examples = items.filter((i) => i.id.startsWith('example:'));
+  assert.deepEqual(examples.map((i) => [i.source, i.name]), [
+    ['Examples: customer-follow-up', 'customer-follow-up'],
+    ['Examples: inventory', 'inventory'],
+    ['Examples: invoicing', 'invoicing'],
+  ]);
+  assert.ok(examples.every((i) => i.description.length > 20), 'each example has a description');
+  assert.equal(items.indexOf(examples[0]), 0);
 });
 
 test('reader source only uses read functions', async () => {

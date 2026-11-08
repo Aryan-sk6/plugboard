@@ -1,0 +1,6 @@
+{
+  "name": "inventory",
+  "version": "0.1.0",
+  "description": "Keep track of your stock and find out what to reorder.",
+  "license": "MIT"
+}

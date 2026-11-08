@@ -41,6 +41,12 @@ function cellText(v: unknown): string {
   return String(v ?? '');
 }
 
+/** Long text is shortened in the on-screen list so the table stays readable. */
+function shortCell(v: unknown, max = 80): string {
+  const s = cellText(v).replace(/\s+/g, ' ').trim();
+  return s.length > max ? s.slice(0, max - 1) + '…' : s;
+}
+
 /** YYYY-MM-DD in this computer's time zone (the server runs on the user's own computer). */
 export function localDate(iso: string): string {
   const d = new Date(iso);
@@ -51,13 +57,19 @@ export function localDate(iso: string): string {
 export function recordsTable(collection: string, records: StoredRecord[]) {
   const labels: string[] = [];
   for (const r of records) for (const k of Object.keys(r.data)) if (!labels.includes(k)) labels.push(k);
+  if (labels.includes('Result')) labels.push(...labels.splice(labels.indexOf('Result'), 1)); // AI answer last
   const columns = [...labels.map((label, i) => ({ id: `c${i}`, label })), { id: 'saved', label: 'Saved' }];
   const rows = records.map((r) => ({
     _id: String(r.id),
-    ...Object.fromEntries(labels.map((l, i) => [`c${i}`, cellText(r.data[l])])),
+    ...Object.fromEntries(labels.map((l, i) => [`c${i}`, shortCell(r.data[l])])),
     saved: localDate(r.updatedAt),
   }));
-  return { kind: 'records' as const, collection, columns, rows };
+  // Full text for the spreadsheet download; the on-screen rows above are shortened.
+  const fullRows = records.map((r) => ({
+    ...Object.fromEntries(labels.map((l, i) => [`c${i}`, Array.isArray(r.data[l]) ? JSON.stringify(r.data[l]) : cellText(r.data[l])])),
+    saved: localDate(r.updatedAt),
+  }));
+  return { kind: 'records' as const, collection, columns, rows, fullRows };
 }
 
 /** Saved records as text the AI can read. */

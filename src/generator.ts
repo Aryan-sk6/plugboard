@@ -7,7 +7,7 @@ import { validateRecipe, schemaForModel, fallbackRecipe, type Recipe } from './r
 import { readInstructions, type PluginItem } from './reader.ts';
 
 /** Bump when the prompt or schema changes, so old cached recipes are regenerated. */
-export const GENERATOR_VERSION = 2;
+export const GENERATOR_VERSION = 3;
 const MAX_RETRIES = 2;
 // shortcut: very long skill files are cut to this size; raise it if real plugins lose important detail.
 const MAX_CHARS = 40_000;
@@ -45,7 +45,10 @@ If the tool works with things the user will want to keep and reuse, use these:
 - An action with kind "list" and uses "<list name>" shows the saved records (no fields needed).
 - A field with type "record" and collection "<list name>" lets the user pick one saved record (for example "Which customer?").
 - A normal action (kind "run", or no kind) can add uses "<list name>" to give the AI all saved records of that list, and saveTo "<list name>" to save the answers plus the AI's result.
-List names are lowercase words like customers, invoices or stock. Only use these when they genuinely help.`;
+List names are lowercase words like customers, invoices or stock. Only use these when they genuinely help.
+Every button uses and checks every field on its screen. So give each job its own screen with only the fields that job needs:
+for example one screen to add or update records (with its save and list buttons) and another screen for asking the AI (with only the fields the AI needs).
+Never put a "save" button and an AI button on the same screen.`;
 
 export function hashInput(text: string): string {
   return createHash('sha256').update(`v${GENERATOR_VERSION}\n${text}`).digest('hex');

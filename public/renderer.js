@@ -370,7 +370,7 @@ export function confirmAction(action, title = 'Before this runs', yesLabel = 'Ye
     const dialog = el('dialog', 'confirm');
     dialog.append(el('h3', null, title), el('p', null, action.does));
     const list = el('ul');
-    if (action.writesFiles) list.append(el('li', null, 'This will create or change files on your computer.'));
+    if (action.writesFiles) list.append(el('li', null, 'This makes a file for you to download. Plugboard does not change any files on your computer.'));
     if (action.sendsMessages) list.append(el('li', null, 'This will send messages or emails on your behalf.'));
     const row = el('div', 'action');
     const yes = el('button', null, yesLabel);
@@ -537,7 +537,7 @@ export function renderResult(result, opts = {}) {
     }
     scroller.append(table);
     box.append(scroller);
-    box.append(downloadLink('Download as spreadsheet (.csv)', `${result.collection || 'result'}.csv`, toCsv(result.columns, result.rows), 'text/csv'));
+    box.append(downloadLink('Download as spreadsheet (.csv)', `${result.collection || 'result'}.csv`, toCsv(result.columns, result.fullRows || result.rows), 'text/csv'));
     return box;
   }
 

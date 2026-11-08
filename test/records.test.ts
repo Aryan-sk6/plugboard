@@ -34,6 +34,16 @@ test('saved records become a table with ids, and text for the AI', () => {
   assert.match(recordsForPrompt('stock', s.list('p', 'stock')), /Saved stock \(2, newest first.*\n\{"Item":"Plate"/);
 });
 
+test('saved lists stay readable: long text is shortened and the AI answer goes last', () => {
+  const s = new Store(':memory:');
+  s.save('p', 'invoices', { 'Invoice number': 'INV-1', Result: 'INVOICE\n' + 'x'.repeat(500), Customer: 'Rosa' });
+  const t = recordsTable('invoices', s.list('p', 'invoices'));
+  assert.deepEqual(t.columns.map((c) => c.label), ['Invoice number', 'Customer', 'Result', 'Saved']);
+  assert.equal(t.rows[0].c2.length, 80);
+  assert.ok(t.rows[0].c2.startsWith('INVOICE x') && t.rows[0].c2.endsWith('…'));
+  assert.equal(t.fullRows[0].c2.length, 508, 'download keeps the full text');
+});
+
 test('recipes with save, list and pick-a-record are valid; broken ones are caught', () => {
   const r = { ...goodRecipe(), screens: [...goodRecipe().screens, ...storeScreens()] };
   assert.deepEqual(validateRecipe(r), []);
@@ -47,4 +57,13 @@ test('recipes with save, list and pick-a-record are valid; broken ones are caugh
   assert.match(errors, /lists records, so it needs uses/);
   assert.match(errors, /keyField "nope" is not a field/);
   assert.match(errors, /picks a saved record, so it needs a collection/);
+});
+
+test('a screen may not mix saving with asking the AI', () => {
+  const r = { ...goodRecipe(), screens: storeScreens() };
+  r.screens[0].actions.push({ id: 'ask', label: 'Ask', does: 'Asks the AI.', output: 'table', writesFiles: false, sendsMessages: false, uses: 'customers' });
+  assert.match(validateRecipe(r).join('\n'), /mixes a "save" action with an AI \("run"\) action/);
+  r.screens[0].actions.pop();
+  r.screens[0].actions[1].kind = 'list';
+  assert.deepEqual(validateRecipe(r), [], 'save + list on one screen is fine');
 });

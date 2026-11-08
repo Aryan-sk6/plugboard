@@ -171,6 +171,9 @@ export function validateRecipe(value: unknown): string[] {
       if (a.kind === 'list' && !a.uses) errors.push(`${p} lists records, so it needs uses`);
       if (a.keyField && !s.fields.some((f) => f.id === a.keyField)) errors.push(`${p} keyField "${a.keyField}" is not a field on this screen`);
     });
+    // Every button uses (and checks) every field on its screen, so saving and asking the AI must not share a screen.
+    const kinds = new Set(s.actions.map((a) => a.kind ?? 'run'));
+    if (kinds.has('save') && kinds.has('run')) errors.push(`screens[${si}] mixes a "save" action with an AI ("run") action; put them on separate screens, each with only the fields it needs`);
   });
   return errors;
 }
