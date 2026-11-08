@@ -1,0 +1,6 @@
+{
+  "name": "customer-follow-up",
+  "version": "0.1.0",
+  "description": "Keep a simple customer list and write friendly follow-up emails.",
+  "license": "MIT"
+}

@@ -82,11 +82,12 @@ function renderList(items, connected) {
 // ---- Helper screen ----
 
 /** Sends one button press to the Runner and shows live progress, then the result. */
-async function runHelper(item, screen, action, values, results) {
+async function runHelper(item, screen, action, values, results, form) {
   const stop = new AbortController();
   const box = el('section', 'panel result');
   box.setAttribute('aria-live', 'polite');
-  const status = el('p', 'status', 'Claude is working on it… This can take a minute.');
+  const kind = action.kind || 'run';
+  const status = el('p', 'status', kind === 'save' ? 'Saving…' : kind === 'list' ? 'Loading…' : 'Claude is working on it… This can take a minute.');
   const live = el('div', 'result-text');
   const stopBtn = el('button', 'secondary', 'Stop');
   stopBtn.type = 'button';
@@ -129,7 +130,17 @@ async function runHelper(item, screen, action, values, results) {
   } catch (err) {
     result = { kind: 'error', text: stop.signal.aborted ? 'Stopped. Nothing else was done.' : err.message === 'Failed to fetch' ? "Plugboard isn't responding. Make sure it is still running, then try again." : err.message };
   }
-  results.replaceChildren(renderResult(result));
+  const onDelete = async (row) => {
+    try {
+      await getJson('/api/records/delete', { id: item.id, collection: result.collection, recordId: Number(row._id) });
+    } catch (err) {
+      results.replaceChildren(renderResult({ kind: 'error', text: err.message }));
+      return;
+    }
+    form.refreshRecords();
+    runHelper(item, screen, action, values, results, form); // show the updated list
+  };
+  results.replaceChildren(renderResult(result, { onDelete }));
 }
 
 function showTool(data) {
@@ -140,8 +151,10 @@ function showTool(data) {
   app.append(back, el('h2', 'tool-title', recipe.title), el('p', 'lede', recipe.summary));
   if (notice) app.append(el('p', 'notice', notice));
   const results = el('div');
+  const loadRecords = async (collection) => (await getJson(`/api/records?id=${encodeURIComponent(item.id)}&collection=${encodeURIComponent(collection)}`)).records;
+  const form = renderRecipe(recipe, (screen, action, values) => runHelper(item, screen, action, values, results, form), { loadRecords });
   app.append(
-    renderRecipe(recipe, (screen, action, values) => runHelper(item, screen, action, values, results)),
+    form,
     results,
     el('p', 'muted small', source === 'cache' ? 'Screen loaded from this computer.' : source === 'generated' ? 'Screen designed just now and saved for next time.' : 'Simple screen shown.'),
   );

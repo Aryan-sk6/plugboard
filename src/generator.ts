@@ -7,7 +7,7 @@ import { validateRecipe, schemaForModel, fallbackRecipe, type Recipe } from './r
 import { readInstructions, type PluginItem } from './reader.ts';
 
 /** Bump when the prompt or schema changes, so old cached recipes are regenerated. */
-export const GENERATOR_VERSION = 1;
+export const GENERATOR_VERSION = 2;
 const MAX_RETRIES = 2;
 // shortcut: very long skill files are cut to this size; raise it if real plugins lose important detail.
 const MAX_CHARS = 40_000;
@@ -36,7 +36,16 @@ Return one screen recipe as JSON matching the given schema:
 - Each action is a button. "does" explains in one plain sentence what pressing it does.
 - Set writesFiles true if the action creates or changes files, and sendsMessages true if it sends emails or messages. Otherwise false.
 - output is "text", "table" or "file" depending on what the user gets back.
-- version is always 1.`;
+- Keep screens short: ask only what the tool really needs (aim for 8 fields or fewer per screen).
+- version is always 1.
+
+Remembering things: Plugboard can keep simple lists on the user's computer (for example customers, invoices or stock).
+If the tool works with things the user will want to keep and reuse, use these:
+- An action with kind "save" and saveTo "<list name>" stores the screen's answers as one record (no AI involved). Add keyField (a field id such as the name) if saving the same name again should update that record instead of adding a new one.
+- An action with kind "list" and uses "<list name>" shows the saved records (no fields needed).
+- A field with type "record" and collection "<list name>" lets the user pick one saved record (for example "Which customer?").
+- A normal action (kind "run", or no kind) can add uses "<list name>" to give the AI all saved records of that list, and saveTo "<list name>" to save the answers plus the AI's result.
+List names are lowercase words like customers, invoices or stock. Only use these when they genuinely help.`;
 
 export function hashInput(text: string): string {
   return createHash('sha256').update(`v${GENERATOR_VERSION}\n${text}`).digest('hex');

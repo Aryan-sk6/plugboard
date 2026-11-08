@@ -21,7 +21,7 @@ export function validateValues(screen, values) {
       continue;
     }
     if (isEmpty(v)) {
-      const missing = { table: 'Please fill in at least one row.', file: 'Please choose a file.', dropdown: 'Please pick one of the choices.', date: 'Please pick a date.' };
+      const missing = { table: 'Please fill in at least one row.', file: 'Please choose a file.', dropdown: 'Please pick one of the choices.', date: 'Please pick a date.', record: 'Please pick one from your saved list.' };
       if (f.required) errors[f.id] = missing[f.type] || 'Please fill this in.';
       continue;
     }
@@ -158,8 +158,8 @@ function cellInput(type, label) {
   return input;
 }
 
-/** Builds one field. Returns { node, get, setError }. */
-function buildField(f) {
+/** Builds one field. Returns { node, get, setError, focus, reload? }. */
+function buildField(f, opts = {}) {
   const id = `f${++uid}`;
   const wrap = el('div', `field field-${f.type}`);
   const label = el('label', 'field-label', f.label);
@@ -173,6 +173,7 @@ function buildField(f) {
   if (help) help.id = id + '-help';
   let control;
   let get;
+  let reload = null;
 
   switch (f.type) {
     case 'longtext':
@@ -236,6 +237,32 @@ function buildField(f) {
     case 'table':
       ({ control, get } = buildTable(f, id));
       break;
+    case 'record': {
+      // Pick one of this helper's saved records. The value sent is the record's id; the server looks it up.
+      control = el('select');
+      const select = control;
+      get = () => select.value;
+      reload = async () => {
+        const keep = select.value;
+        let records = [];
+        try {
+          records = opts.loadRecords ? await opts.loadRecords(f.collection) : [];
+        } catch {
+          records = null;
+        }
+        const first = el('option', null, records === null ? "Couldn't load your saved list" : records.length ? 'Choose…' : `Nothing saved in your ${f.collection} yet`);
+        first.value = '';
+        select.replaceChildren(first);
+        for (const r of records || []) {
+          const opt = el('option', null, r.label);
+          opt.value = String(r.id);
+          select.append(opt);
+        }
+        if ([...select.options].some((o) => o.value === keep)) select.value = keep;
+      };
+      reload();
+      break;
+    }
     default: // text, and anything unexpected falls back to a plain text box
       control = el('input');
       control.type = 'text';
@@ -264,7 +291,7 @@ function buildField(f) {
   }
   if (help) wrap.append(help);
   wrap.append(error);
-  return { node: wrap, get, setError, focus: () => (control.querySelector?.('input') || control).focus() };
+  return { node: wrap, get, setError, reload, focus: () => (control.querySelector?.('input') || control).focus() };
 }
 
 function buildTable(f, id) {
@@ -322,16 +349,31 @@ function buildTable(f, id) {
   return { control: box, get };
 }
 
+/** Spreadsheet text. Cells starting with = + - @ get a leading quote so spreadsheet apps don't run them as formulas. */
+export function toCsv(columns, rows) {
+  const cell = (v) => {
+    let s = String(v ?? '');
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return `"${s.replace(/"/g, '""')}"`;
+  };
+  return [columns.map((c) => c.label), ...rows.map((r) => columns.map((c) => r[c.id]))].map((cells) => cells.map(cell).join(',')).join('\r\n');
+}
+
+/** Simple yes/no box. Resolves true if the user agrees. */
+export function confirmBox(title, text, yesLabel = 'Yes, go ahead') {
+  return confirmAction({ does: text }, title, yesLabel);
+}
+
 /** Shows an "are you sure" box for actions that write files or send messages. Resolves true if the user agrees. */
-export function confirmAction(action) {
+export function confirmAction(action, title = 'Before this runs', yesLabel = 'Yes, go ahead') {
   return new Promise((resolve) => {
     const dialog = el('dialog', 'confirm');
-    dialog.append(el('h3', null, 'Before this runs'), el('p', null, action.does));
+    dialog.append(el('h3', null, title), el('p', null, action.does));
     const list = el('ul');
     if (action.writesFiles) list.append(el('li', null, 'This will create or change files on your computer.'));
     if (action.sendsMessages) list.append(el('li', null, 'This will send messages or emails on your behalf.'));
     const row = el('div', 'action');
-    const yes = el('button', null, 'Yes, go ahead');
+    const yes = el('button', null, yesLabel);
     const no = el('button', 'secondary', 'Cancel');
     row.append(yes, no);
     dialog.append(list, row);
@@ -355,12 +397,16 @@ export function confirmAction(action) {
 /**
  * Renders a whole recipe: tabs if it has several screens, fields, and buttons.
  * onAction(screen, action, values) is called after the form checks out (and the user confirmed, if needed).
+ * opts.loadRecords(collection) returns [{ id, label }] for "pick a saved record" fields.
  */
-export function renderRecipe(recipe, onAction) {
+export function renderRecipe(recipe, onAction, opts = {}) {
   const root = el('div', 'recipe');
   const screens = recipe.screens;
   let tabs = null;
   const panels = [];
+  const reloaders = [];
+  /** Refreshes every "pick a saved record" list, e.g. after something was saved or deleted. */
+  root.refreshRecords = () => Promise.all(reloaders.map((r) => r()));
 
   if (screens.length > 1) {
     tabs = el('div', 'tabs');
@@ -374,8 +420,11 @@ export function renderRecipe(recipe, onAction) {
     panel.addEventListener('submit', (e) => e.preventDefault());
     panel.append(el('h3', null, screen.title));
     if (screen.intro) panel.append(el('p', 'muted', screen.intro));
-    const fields = screen.fields.map((f) => ({ f, ui: buildField(f) }));
-    for (const { ui } of fields) panel.append(ui.node);
+    const fields = screen.fields.map((f) => ({ f, ui: buildField(f, opts) }));
+    for (const { ui } of fields) {
+      panel.append(ui.node);
+      if (ui.reload) reloaders.push(ui.reload);
+    }
 
     const values = () => Object.fromEntries(fields.map(({ f, ui }) => [f.id, ui.get()]));
     const row = el('div', 'action actions');
@@ -387,7 +436,7 @@ export function renderRecipe(recipe, onAction) {
       btn.setAttribute('aria-describedby', desc.id);
       btn.addEventListener('click', async () => {
         const vals = values();
-        const errors = validateValues(screen, vals);
+        const errors = action.kind === 'list' ? {} : validateValues(screen, vals); // showing a list needs no answers
         let first = null;
         for (const { f, ui } of fields) {
           ui.setError(errors[f.id] || null);
@@ -400,6 +449,7 @@ export function renderRecipe(recipe, onAction) {
           await onAction(screen, action, vals);
         } finally {
           btn.disabled = false;
+          if (action.kind === 'save' || action.saveTo) root.refreshRecords();
         }
       });
       const itemBox = el('div', 'action-item');
@@ -432,12 +482,16 @@ export function renderRecipe(recipe, onAction) {
  *   { kind: 'text', text }
  *   { kind: 'table', columns: [{ id, label }], rows: [{...}] }
  *   { kind: 'file', name, text, mime? }
+ *   { kind: 'records', collection, columns, rows: [{ _id, ...}] }   saved records, with Delete buttons
+ *   { kind: 'saved', text }
  *   { kind: 'error', text }
+ * Any result may carry savedNote. opts.onDelete(row) is called when a saved record's Delete is confirmed.
  */
-export function renderResult(result) {
+export function renderResult(result, opts = {}) {
   const box = el('section', 'panel result');
   box.setAttribute('aria-live', 'polite');
-  box.append(el('h3', null, result.kind === 'error' ? 'Something went wrong' : 'Result'));
+  const titles = { error: 'Something went wrong', saved: 'Saved', records: `Your saved ${result.collection || 'records'}` };
+  box.append(el('h3', null, titles[result.kind] || 'Result'));
 
   if (result.kind === 'error') {
     box.classList.add('result-error');
@@ -445,25 +499,45 @@ export function renderResult(result) {
     return box;
   }
   if (result.note) box.append(el('p', null, result.note));
+  if (result.savedNote) box.append(el('p', 'notice', '✓ ' + result.savedNote));
 
-  if (result.kind === 'table') {
+  if (result.kind === 'saved') {
+    box.append(el('p', null, '✓ ' + result.text));
+    return box;
+  }
+
+  if (result.kind === 'table' || result.kind === 'records') {
+    if (result.rows.length === 0) {
+      box.append(el('p', 'muted', 'Nothing saved here yet.'));
+      return box;
+    }
     const scroller = el('div', 'table-scroll');
     const table = el('table', 'data');
     const head = el('tr');
     for (const c of result.columns) head.append(el('th', null, c.label));
+    if (result.kind === 'records') head.append(el('th', 'sr-only', 'Delete'));
     table.append(el('thead'), el('tbody'));
     table.tHead.append(head);
     for (const row of result.rows) {
       const tr = el('tr');
       for (const c of result.columns) tr.append(el('td', null, row[c.id] == null ? '' : String(row[c.id])));
+      if (result.kind === 'records') {
+        const del = el('button', 'link-button', 'Delete');
+        del.type = 'button';
+        del.setAttribute('aria-label', `Delete ${row[result.columns[0].id] || 'this record'}`);
+        del.addEventListener('click', async () => {
+          const ok = await confirmBox('Delete this record?', `"${row[result.columns[0].id] || 'This record'}" will be removed from your ${result.collection}. This can't be undone.`, 'Delete');
+          if (ok && opts.onDelete) await opts.onDelete(row);
+        });
+        const td = el('td');
+        td.append(del);
+        tr.append(td);
+      }
       table.tBodies[0].append(tr);
     }
     scroller.append(table);
     box.append(scroller);
-    const csv = [result.columns.map((c) => c.label), ...result.rows.map((r) => result.columns.map((c) => r[c.id] ?? ''))]
-      .map((cells) => cells.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','))
-      .join('\r\n');
-    box.append(downloadLink('Download as spreadsheet (.csv)', 'result.csv', csv, 'text/csv'));
+    box.append(downloadLink('Download as spreadsheet (.csv)', `${result.collection || 'result'}.csv`, toCsv(result.columns, result.rows), 'text/csv'));
     return box;
   }
 

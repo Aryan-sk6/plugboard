@@ -6,22 +6,25 @@ import { createApp } from '../src/server.ts';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { makeClaudeHome, goodRecipe } from './fixture.ts';
+import { makeClaudeHome, goodRecipe, storeScreens } from './fixture.ts';
 
 // AI calls replaced with fixed answers; this only checks the HTTP wiring.
 const server = createApp({
   claudeHome: await makeClaudeHome(),
+  examplesDir: '',
   dataDir: await mkdtemp(join(tmpdir(), 'plugboard-data-')),
-  ask: async () => ({ ok: true, text: '', structured: goodRecipe() }),
+  ask: async () => ({ ok: true, text: '', structured: { ...goodRecipe(), screens: [...goodRecipe().screens, ...storeScreens()] } }),
   adapter: {
     id: 'claude',
     label: 'test',
     ask: async (o) => {
+      lastPrompt = o.prompt;
       o.onProgress?.({ type: 'text', text: 'Invoice ' });
       return { ok: true, text: 'Invoice for ' + (/Customer name: (\w+)/.exec(o.prompt)?.[1] ?? '?') };
     },
   },
 });
+let lastPrompt = '';
 await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
 const port = (server.address() as AddressInfo).port;
 after(() => server.close());
@@ -101,11 +104,56 @@ function post(path: string, body: object): Promise<{ status: number; body: strin
 test('run endpoint streams progress then a result, and rejects unknown buttons', async () => {
   const items = JSON.parse((await get('/api/plugins')).body).items;
   const id = items.find((i: any) => i.name === 'invoice-maker').id;
-  const ok = await post('/api/run', { id, screenId: 'main', actionId: 'make', values: { customer: 'Rosa' } });
+  const ok = await post('/api/run', { id, screenId: 'main', actionId: 'make', values: { customer: 'Rosa', currency: 'EUR', lines: [{ item: 'Chair', price: 40 }] } });
   assert.equal(ok.status, 200);
   const lines = ok.body.trim().split('\n').map((l) => JSON.parse(l));
   assert.deepEqual(lines.map((l) => l.type), ['started', 'progress', 'result']);
   assert.deepEqual(lines[2].result, { kind: 'text', text: 'Invoice for Rosa' });
   assert.equal((await post('/api/run', { id, screenId: 'main', actionId: 'nope', values: {} })).status, 409);
   assert.equal((await post('/api/run', { id: 'nope', screenId: 'main', actionId: 'make' })).status, 404);
+});
+
+test('the server re-checks answers instead of trusting the page', async () => {
+  const id = await helperId('invoice-maker');
+  const r = await post('/api/run', { id, screenId: 'main', actionId: 'make', values: { customer: 'Rosa' } });
+  assert.equal(r.status, 400);
+  assert.match(JSON.parse(r.body).error, /need fixing/);
+});
+
+async function helperId(name: string): Promise<string> {
+  return JSON.parse((await get('/api/plugins')).body).items.find((i: any) => i.name === name).id;
+}
+const lastResult = (body: string) => JSON.parse(body.trim().split('\n').at(-1)!).result;
+
+test('save, list, pick a saved record for the AI, then delete', async () => {
+  const id = await helperId('invoice-maker');
+  const save = (name: string, email: string) => post('/api/run', { id, screenId: 'add', actionId: 'save', values: { name, email } });
+  assert.deepEqual(lastResult((await save('Rosa', 'rosa@example.com')).body), { kind: 'saved', text: 'Saved to your customers.' });
+  await save('Ben', '');
+  assert.deepEqual(lastResult((await save('rosa', 'new@example.com')).body), { kind: 'saved', text: 'Updated the existing record in your customers.' });
+
+  const list = lastResult((await post('/api/run', { id, screenId: 'add', actionId: 'show', values: {} })).body);
+  assert.equal(list.kind, 'records');
+  assert.deepEqual(list.rows.map((r: any) => r.c0), ['Ben', 'Rosa']);
+
+  const picks = JSON.parse((await get(`/api/records?id=${encodeURIComponent(id)}&collection=customers`)).body).records;
+  const rosa = picks.find((p: any) => p.label === 'Rosa');
+  const draft = lastResult((await post('/api/run', { id, screenId: 'write', actionId: 'draft', values: { who: String(rosa.id), topic: 'Spring sale' } })).body);
+  assert.match(lastPrompt, /Which customer\?: Rosa\n {2}- Customer name: Rosa\n {2}- Email: new@example\.com/);
+  assert.match(lastPrompt, /<saved_records>\nSaved customers \(2/);
+  assert.equal(draft.savedNote, 'Saved to your emails.');
+
+  const del = await post('/api/records/delete', { id, collection: 'customers', recordId: rosa.id });
+  assert.equal(del.status, 200);
+  assert.equal((await post('/api/records/delete', { id, collection: 'customers', recordId: rosa.id })).status, 404);
+  assert.equal(JSON.parse((await get(`/api/records?id=${encodeURIComponent(id)}&collection=customers`)).body).records.length, 1);
+});
+
+test('records of one helper are invisible to another', async () => {
+  const mine = await helperId('invoice-maker');
+  const other = await helperId('count-stock');
+  await post('/api/run', { id: mine, screenId: 'add', actionId: 'save', values: { name: 'Private Pat' } });
+  const otherList = JSON.parse((await get(`/api/records?id=${encodeURIComponent(other)}&collection=customers`)).body).records;
+  assert.ok(!otherList.some((r: any) => r.label === 'Private Pat'));
+  assert.equal((await get(`/api/records?id=${encodeURIComponent(mine)}&collection=../../x`)).status, 400);
 });

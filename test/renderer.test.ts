@@ -52,6 +52,13 @@ test('empty table rows are dropped', () => {
   assert.deepEqual(cleanRows([{ a: '', b: '' }, { a: 'x', b: '' }, { a: ' ', b: '' }]), [{ a: 'x', b: '' }]);
 });
 
+test('spreadsheet downloads cannot smuggle in formulas', async () => {
+  // @ts-ignore - plain browser JS module
+  const { toCsv } = await import('../public/renderer.js');
+  const csv = toCsv([{ id: 'a', label: 'Name' }, { id: 'b', label: 'Note' }], [{ a: '=HYPERLINK("http://evil")', b: 'He said "hi"' }, { a: '-5', b: 'ok' }]);
+  assert.equal(csv, '"Name","Note"\r\n"\'=HYPERLINK(""http://evil"")","He said ""hi"""\r\n"\'-5","ok"');
+});
+
 test('only small text files are accepted', () => {
   assert.equal(fileProblem('prices.csv', 100), null);
   assert.match(fileProblem('photo.png', 100), /text files only/);

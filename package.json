@@ -9,7 +9,8 @@
   },
   "files": [
     "dist",
-    "public"
+    "public",
+    "examples"
   ],
   "engines": {
     "node": ">=22.18"

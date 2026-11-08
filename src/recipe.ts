@@ -1,7 +1,8 @@
 // Screen recipe: the JSON the AI returns to describe a plugin's screens.
 // It is data only. The Renderer maps it onto a fixed set of components; nothing in it is ever executed.
 
-export const FIELD_TYPES = ['text', 'longtext', 'number', 'date', 'dropdown', 'checkbox', 'file', 'table'] as const;
+export const FIELD_TYPES = ['text', 'longtext', 'number', 'date', 'dropdown', 'checkbox', 'file', 'table', 'record'] as const;
+export const ACTION_KINDS = ['run', 'save', 'list'] as const;
 export const OUTPUT_TYPES = ['text', 'table', 'file'] as const;
 
 export interface Column { id: string; label: string; type: 'text' | 'number' | 'date' }
@@ -14,6 +15,8 @@ export interface Field {
   placeholder?: string;
   options?: string[];
   columns?: Column[];
+  /** For type "record": which saved list to pick from. */
+  collection?: string;
 }
 export interface Action {
   id: string;
@@ -23,6 +26,14 @@ export interface Action {
   output: (typeof OUTPUT_TYPES)[number];
   writesFiles: boolean;
   sendsMessages: boolean;
+  /** run (default): ask the AI. save: store the form as a record. list: show saved records. */
+  kind?: (typeof ACTION_KINDS)[number];
+  /** Saved list to read: shown by "list", given to the AI as context by "run". */
+  uses?: string;
+  /** Saved list to write: "save" stores the form; "run" stores the form plus the AI's answer. */
+  saveTo?: string;
+  /** Field id whose value identifies a record; saving the same value again updates it. */
+  keyField?: string;
 }
 export interface Screen { id: string; title: string; intro?: string; fields: Field[]; actions: Action[] }
 export interface Recipe { version: 1; title: string; summary: string; screens: Screen[] }
@@ -71,6 +82,7 @@ export const RECIPE_SCHEMA = {
                     properties: { id: ID, label: str(60), type: { type: 'string', enum: ['text', 'number', 'date'] } },
                   },
                 },
+                collection: ID,
               },
             },
           },
@@ -87,6 +99,10 @@ export const RECIPE_SCHEMA = {
                 output: { type: 'string', enum: OUTPUT_TYPES },
                 writesFiles: { type: 'boolean' },
                 sendsMessages: { type: 'boolean' },
+                kind: { type: 'string', enum: ACTION_KINDS },
+                uses: ID,
+                saveTo: ID,
+                keyField: ID,
               },
             },
           },
@@ -147,6 +163,13 @@ export function validateRecipe(value: unknown): string[] {
       if (f.type === 'dropdown' && !f.options?.length) errors.push(`${p} is a dropdown, so it needs options`);
       if (f.type === 'table' && !f.columns?.length) errors.push(`${p} is a table, so it needs columns`);
       if (f.columns) for (const d of dupes(f.columns.map((c) => c.id))) errors.push(`${p} column id "${d}" is used twice`);
+      if (f.type === 'record' && !f.collection) errors.push(`${p} picks a saved record, so it needs a collection`);
+    });
+    s.actions.forEach((a, ai) => {
+      const p = `screens[${si}].actions[${ai}]`;
+      if (a.kind === 'save' && !a.saveTo) errors.push(`${p} saves records, so it needs saveTo`);
+      if (a.kind === 'list' && !a.uses) errors.push(`${p} lists records, so it needs uses`);
+      if (a.keyField && !s.fields.some((f) => f.id === a.keyField)) errors.push(`${p} keyField "${a.keyField}" is not a field on this screen`);
     });
   });
   return errors;

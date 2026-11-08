@@ -128,8 +128,25 @@ export async function readInstructions(item: PluginItem): Promise<string> {
   return (await readFile(item.file, 'utf8')).replace(/\r\n?/g, '\n');
 }
 
-/** Every skill and command Claude Code would load for this user. */
-export async function listPlugins(home = claudeHome()): Promise<PluginItem[]> {
-  const [own, plugins] = await Promise.all([scanFolder(home, 'Your skills', 'Your commands', 'user'), scanPlugins(home)]);
-  return [...own, ...plugins];
+/** Sample plugins shipped with Plugboard: each subfolder of examplesDir is one plugin. */
+async function scanExamples(examplesDir: string): Promise<PluginItem[]> {
+  const results = await Promise.all(
+    (await subdirs(examplesDir)).map(async (d) => {
+      const root = join(examplesDir, d);
+      const manifest = await readJson(join(root, '.claude-plugin', 'plugin.json'));
+      const name = `Examples: ${typeof manifest?.name === 'string' ? manifest.name : d}`;
+      return scanFolder(root, name, name, `example:${d}`);
+    }),
+  );
+  return results.flat();
+}
+
+/** Every skill and command Claude Code would load for this user, plus Plugboard's examples if a folder is given. */
+export async function listPlugins(home = claudeHome(), examplesDir?: string): Promise<PluginItem[]> {
+  const [own, plugins, examples] = await Promise.all([
+    scanFolder(home, 'Your skills', 'Your commands', 'user'),
+    scanPlugins(home),
+    examplesDir ? scanExamples(examplesDir) : [],
+  ]);
+  return [...examples, ...own, ...plugins];
 }

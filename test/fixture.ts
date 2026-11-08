@@ -55,3 +55,32 @@ export function goodRecipe(): any {
     }],
   };
 }
+
+/** Extra screens that save, list and recall records (customers). */
+export function storeScreens(): any[] {
+  return [
+    {
+      id: 'add',
+      title: 'Add a customer',
+      fields: [
+        { id: 'name', label: 'Customer name', type: 'text', required: true },
+        { id: 'email', label: 'Email', type: 'text', required: false },
+      ],
+      actions: [
+        { id: 'save', label: 'Save customer', does: 'Saves this customer.', output: 'text', writesFiles: false, sendsMessages: false, kind: 'save', saveTo: 'customers', keyField: 'name' },
+        { id: 'show', label: 'Show customers', does: 'Shows saved customers.', output: 'table', writesFiles: false, sendsMessages: false, kind: 'list', uses: 'customers' },
+      ],
+    },
+    {
+      id: 'write',
+      title: 'Write to a customer',
+      fields: [
+        { id: 'who', label: 'Which customer?', type: 'record', required: true, collection: 'customers' },
+        { id: 'topic', label: 'What about?', type: 'text', required: true },
+      ],
+      actions: [
+        { id: 'draft', label: 'Write email', does: 'Drafts an email.', output: 'text', writesFiles: false, sendsMessages: false, uses: 'customers', saveTo: 'emails' },
+      ],
+    },
+  ];
+}

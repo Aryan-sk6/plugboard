@@ -6,10 +6,15 @@ import { join, extname, normalize, sep } from 'node:path';
 import { listPlugins, readInstructions } from './reader.ts';
 import { getRecipe, type GeneratorDeps } from './generator.ts';
 import { getStatus, startInstall, startSignin, sendSigninCode } from './setup.ts';
-import { runAction, type Adapter } from './runner.ts';
+import { runAction, type Adapter, type RunResult } from './runner.ts';
+import { Store, recordLabel } from './store.ts';
+import { resolvePicks, toRecord, recordsTable, recordsForPrompt } from './records.ts';
+// @ts-ignore - plain JS shared with the browser, so the page and the server check answers the same way
+import { validateValues } from '../public/renderer.js';
 
 const PUBLIC = fileURLToPath(new URL('../public/', import.meta.url));
 const DATA = fileURLToPath(new URL('../data/', import.meta.url));
+const EXAMPLES = fileURLToPath(new URL('../examples/', import.meta.url));
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -27,6 +32,8 @@ export interface Options {
   ask?: GeneratorDeps['ask'];
   /** Replaces the AI program used for runs; tests only. */
   adapter?: Adapter;
+  /** Folder of sample plugins; defaults to Plugboard's own examples. "" turns them off. */
+  examplesDir?: string;
 }
 
 function send(res: ServerResponse, status: number, type: string, body: string | Buffer) {
@@ -64,25 +71,80 @@ async function readBody(req: IncomingMessage): Promise<any> {
   }
 }
 
+const GONE = "This helper isn't on this computer any more. Go back and pick another one.";
+const COLLECTION = /^[a-z][a-z0-9_]{0,39}$/;
+
+const stores = new Map<string, Store>();
+function storeFor(opts: Options): Store {
+  const dir = opts.dataDir ?? DATA;
+  let s = stores.get(dir);
+  if (!s) stores.set(dir, (s = new Store(join(dir, 'plugboard.db'))));
+  return s;
+}
+
+/** The user's helpers plus Plugboard's examples ("" turns examples off, for tests). */
+function helpers(opts: Options) {
+  return listPlugins(opts.claudeHome, opts.examplesDir === '' ? undefined : (opts.examplesDir ?? EXAMPLES));
+}
+
+async function findHelper(opts: Options, id: unknown) {
+  return (await helpers(opts)).find((i) => i.id === id);
+}
+
+/** What to keep from an AI answer when an action saves it. */
+function resultForRecord(r: RunResult): unknown {
+  if (r.kind === 'text') return r.text.slice(0, 20_000);
+  if (r.kind === 'file') return `${r.name}\n\n${r.text.slice(0, 20_000)}`;
+  if (r.kind === 'table') return r.rows.map((row) => Object.fromEntries(r.columns.map((c) => [c.label, row[c.id]])));
+  return undefined;
+}
+
 /** Runs one button press and streams progress as one JSON object per line. */
 async function run(req: IncomingMessage, res: ServerResponse, body: any, opts: Options) {
-  const item = (await listPlugins(opts.claudeHome)).find((i) => i.id === body?.id);
-  if (!item) return json(res, 404, { error: "This helper isn't on this computer any more. Go back and pick another one." });
+  const item = await findHelper(opts, body?.id);
+  if (!item) return json(res, 404, { error: GONE });
   const { recipe } = await getRecipe(item, { dataDir: opts.dataDir ?? DATA, ask: opts.ask });
   const screen = recipe.screens.find((s) => s.id === body.screenId);
   const action = screen?.actions.find((a) => a.id === body.actionId);
   if (!screen || !action) return json(res, 409, { error: 'This screen has changed. Please refresh the page and try again.' });
-  const values = body.values && typeof body.values === 'object' && !Array.isArray(body.values) ? body.values : {};
+  const raw = body.values && typeof body.values === 'object' && !Array.isArray(body.values) ? body.values : {};
+  const kind = action.kind ?? 'run';
+  // Same checks as the page, repeated here because the page can't be trusted on its own.
+  const problems = kind === 'list' ? {} : validateValues(screen, raw);
+  if (Object.keys(problems).length) return json(res, 400, { error: 'Some answers need fixing. Please check the form and try again.' });
+
+  const store = storeFor(opts);
+  const values = resolvePicks(screen, raw, store, item.id);
 
   res.writeHead(200, { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
-  const stop = new AbortController();
-  res.on('close', () => stop.abort()); // page closed or Stop pressed: stop the AI too
   const line = (o: unknown) => res.writableEnded || res.write(JSON.stringify(o) + '\n');
   line({ type: 'started' });
-  const result = await runAction(
-    { item, instructions: await readInstructions(item), screen, action, values },
-    { adapter: opts.adapter, signal: stop.signal, onProgress: (p) => line({ ...p, kind: p.type, type: 'progress' }) },
-  );
+
+  let result: RunResult & { savedNote?: string };
+  if (kind === 'list') {
+    result = recordsTable(action.uses!, store.list(item.id, action.uses!));
+  } else if (kind === 'save') {
+    const data = toRecord(screen, values);
+    const keyLabel = screen.fields.find((f) => f.id === action.keyField)?.label;
+    if (!Object.keys(data).length) result = { kind: 'error', text: 'There is nothing to save yet. Fill in the form first.' };
+    else {
+      const { updated } = store.save(item.id, action.saveTo!, data, keyLabel);
+      result = { kind: 'saved', text: updated ? `Updated the existing record in your ${action.saveTo}.` : `Saved to your ${action.saveTo}.` };
+    }
+  } else {
+    const stop = new AbortController();
+    res.on('close', () => stop.abort()); // page closed or Stop pressed: stop the AI too
+    const saved = action.uses ? recordsForPrompt(action.uses, store.list(item.id, action.uses)) : undefined;
+    result = await runAction(
+      { item, instructions: await readInstructions(item), screen, action, values, saved },
+      { adapter: opts.adapter, signal: stop.signal, onProgress: (p) => line({ ...p, kind: p.type, type: 'progress' }) },
+    );
+    const keep = resultForRecord(result);
+    if (action.saveTo && keep !== undefined) {
+      store.save(item.id, action.saveTo, { ...toRecord(screen, values), Result: keep });
+      result.savedNote = `Saved to your ${action.saveTo}.`;
+    }
+  }
   line({ type: 'result', result });
   res.end();
 }
@@ -105,6 +167,13 @@ export function createApp(opts: Options = {}) {
           return json(res, 200, await getStatus());
         }
         if (url.pathname === '/api/run') return run(req, res, body, opts);
+        if (url.pathname === '/api/records/delete') {
+          const item = await findHelper(opts, body?.id);
+          if (!item) return json(res, 404, { error: GONE });
+          if (!COLLECTION.test(String(body.collection)) || !Number.isInteger(body.recordId)) return json(res, 400, { error: 'Not allowed.' });
+          const ok = storeFor(opts).remove(item.id, body.collection, body.recordId);
+          return ok ? json(res, 200, { ok: true }) : json(res, 404, { error: 'That record was already deleted.' });
+        }
         if (url.pathname === '/api/setup/code') {
           if (!sendSigninCode(String(body?.code ?? ''))) return json(res, 400, { error: "That code didn't work. Copy it again from the sign-in page and paste it here." });
           return json(res, 200, { ok: true });
@@ -115,10 +184,18 @@ export function createApp(opts: Options = {}) {
 
       if (url.pathname === '/api/setup/status') return json(res, 200, await getStatus());
 
-      if (url.pathname === '/api/plugins') return json(res, 200, { items: await listPlugins(opts.claudeHome) });
+      if (url.pathname === '/api/plugins') return json(res, 200, { items: await helpers(opts) });
+
+      if (url.pathname === '/api/records') {
+        const item = await findHelper(opts, url.searchParams.get('id'));
+        if (!item) return json(res, 404, { error: GONE });
+        const collection = String(url.searchParams.get('collection'));
+        if (!COLLECTION.test(collection)) return json(res, 400, { error: 'Not allowed.' });
+        return json(res, 200, { records: storeFor(opts).list(item.id, collection).map((r) => ({ id: r.id, label: recordLabel(r.data) })) });
+      }
 
       if (url.pathname === '/api/recipe') {
-        const item = (await listPlugins(opts.claudeHome)).find((i) => i.id === url.searchParams.get('id'));
+        const item = (await helpers(opts)).find((i) => i.id === url.searchParams.get('id'));
         if (!item) return json(res, 404, { error: "This helper isn't on this computer any more. Go back and pick another one." });
         return json(res, 200, { item, ...(await getRecipe(item, { dataDir: opts.dataDir ?? DATA, ask: opts.ask })) });
       }
