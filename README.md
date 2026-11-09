@@ -29,7 +29,7 @@ and it remembers things between uses, like your customers and your stock.
 
 ### Step 2: Get Plugboard (once)
 
-1. Download Plugboard as a ZIP file. (On GitHub, click the green **Code** button, then **Download ZIP**.)
+1. **[Click here to download Plugboard as a ZIP file](https://github.com/Aryan-sk6/plugboard/archive/refs/heads/main.zip).** (Or go to the [Plugboard page](https://github.com/Aryan-sk6/plugboard), click the green **Code** button, then **Download ZIP**.)
 2. **Unpack it.** On Windows, right-click the ZIP and choose **Extract All**. Do not open Plugboard from inside the ZIP, because it won't work from there.
 
 ### Step 3: Start Plugboard (every time)
