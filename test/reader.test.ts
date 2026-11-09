@@ -66,9 +66,9 @@ test('finds the 3 shipped business examples, listed first', async () => {
   const items = await listPlugins(home, fileURLToPath(new URL('../examples/', import.meta.url)));
   const examples = items.filter((i) => i.id.startsWith('example:'));
   assert.deepEqual(examples.map((i) => [i.source, i.name]), [
-    ['Examples: customer-follow-up', 'customer-follow-up'],
-    ['Examples: inventory', 'inventory'],
-    ['Examples: invoicing', 'invoicing'],
+    ['Examples', 'customer-follow-up'],
+    ['Examples', 'inventory'],
+    ['Examples', 'invoicing'],
   ]);
   assert.ok(examples.every((i) => i.description.length > 20), 'each example has a description');
   assert.equal(items.indexOf(examples[0]), 0);

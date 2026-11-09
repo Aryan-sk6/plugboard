@@ -17,7 +17,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "start": "npm run build && node dist/cli.js",
+    "start": "node src/cli.ts",
     "test": "node --test \"test/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
     "prepare": "npm run build"

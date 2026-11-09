@@ -133,9 +133,7 @@ async function scanExamples(examplesDir: string): Promise<PluginItem[]> {
   const results = await Promise.all(
     (await subdirs(examplesDir)).map(async (d) => {
       const root = join(examplesDir, d);
-      const manifest = await readJson(join(root, '.claude-plugin', 'plugin.json'));
-      const name = `Examples: ${typeof manifest?.name === 'string' ? manifest.name : d}`;
-      return scanFolder(root, name, name, `example:${d}`);
+      return scanFolder(root, 'Examples', 'Examples', `example:${d}`);
     }),
   );
   return results.flat();
