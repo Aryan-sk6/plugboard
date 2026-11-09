@@ -52,6 +52,16 @@ test('empty table rows are dropped', () => {
   assert.deepEqual(cleanRows([{ a: '', b: '' }, { a: 'x', b: '' }, { a: ' ', b: '' }]), [{ a: 'x', b: '' }]);
 });
 
+test('only AI actions ask "are you sure"; saving and listing never do', async () => {
+  // @ts-ignore - plain browser JS module
+  const { needsConfirm } = await import('../public/renderer.js');
+  assert.equal(needsConfirm({ kind: 'save', writesFiles: true, sendsMessages: true }), false);
+  assert.equal(needsConfirm({ kind: 'list', writesFiles: true }), false);
+  assert.equal(needsConfirm({ writesFiles: true }), true, 'no kind means an AI action');
+  assert.equal(needsConfirm({ kind: 'run', sendsMessages: true }), true);
+  assert.equal(needsConfirm({ kind: 'run', writesFiles: false, sendsMessages: false }), false);
+});
+
 test('spreadsheet downloads cannot smuggle in formulas', async () => {
   // @ts-ignore - plain browser JS module
   const { toCsv } = await import('../public/renderer.js');

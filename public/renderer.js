@@ -349,6 +349,14 @@ function buildTable(f, id) {
   return { control: box, get };
 }
 
+/**
+ * Only AI actions can need an "are you sure" box. Saving to, or listing, Plugboard's own lists never
+ * writes files or sends messages, whatever the (AI-written) flags on the recipe say.
+ */
+export function needsConfirm(action) {
+  return (action.kind ?? 'run') === 'run' && Boolean(action.writesFiles || action.sendsMessages);
+}
+
 /** Spreadsheet text. Cells starting with = + - @ get a leading quote so spreadsheet apps don't run them as formulas. */
 export function toCsv(columns, rows) {
   const cell = (v) => {
@@ -443,9 +451,9 @@ export function renderRecipe(recipe, onAction, opts = {}) {
           if (errors[f.id] && !first) first = ui;
         }
         if (first) return first.focus();
-        if ((action.writesFiles || action.sendsMessages) && !(await confirmAction(action))) return;
-        btn.disabled = true;
+        btn.disabled = true; // also stops a second press from stacking a second "are you sure" box
         try {
+          if (needsConfirm(action) && !(await confirmAction(action))) return;
           await onAction(screen, action, vals);
         } finally {
           btn.disabled = false;
