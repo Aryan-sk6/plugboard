@@ -129,3 +129,4 @@ dialog.confirm h3 { margin-top: 0; }
 .formatted .table-scroll { margin: 8px 0 14px; }
 .action-item { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; max-width: 360px; }
 .footer-note { margin: 32px 0 40px; overflow-wrap: anywhere; }
+.tab[aria-checked=true] { background: var(--accent); color: var(--bg); border-color: var(--accent); }

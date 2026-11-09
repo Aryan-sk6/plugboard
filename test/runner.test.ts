@@ -27,7 +27,7 @@ test('prompt has instructions, answers and the button, and only known fields', (
   assert.match(p, /<user_answers>\nCustomer name: Rosa/);
   assert.match(p, /pressed "Make invoice" \(Creates the invoice text\.\)/);
   assert.ok(!p.includes('IGNORE ME'), 'fields not in the recipe are dropped');
-  assert.match(RUN_SYSTEM_PROMPT, /no tools/);
+  assert.match(RUN_SYSTEM_PROMPT, /Do not use any tools/);
 });
 
 test('the AI is told when Plugboard saves the result for it', () => {

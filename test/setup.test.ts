@@ -73,3 +73,29 @@ test('installer success and failure', async () => {
   await until(async () => (await getStatus()).install.state === 'failed');
   assert.match((await getStatus()).install.message!, /couldn't be installed/);
 });
+
+// ---- ChatGPT (Codex) ----
+const FAKE_CODEX = fileURLToPath(new URL('./fake-codex.mjs', import.meta.url));
+
+test('ChatGPT: reports not installed, then installed but signed out, then signed in', async () => {
+  process.env.PLUGBOARD_CODEX_PATH = join(tmpdir(), 'no-codex-here.exe');
+  const none = await getStatus('codex');
+  assert.deepEqual([none.installed, none.signedIn], [false, false]);
+  process.env.PLUGBOARD_CODEX_PATH = FAKE_CODEX;
+  assert.deepEqual([(await getStatus('codex')).installed, (await getStatus('codex')).signedIn], [true, false]);
+  await writeFile(process.env.FAKE_STATE!, '1');
+  assert.equal((await getStatus('codex')).signedIn, true);
+});
+
+test('ChatGPT: sign-in shows OpenAI\'s link and finishes, without touching Claude\'s state', async () => {
+  process.env.PLUGBOARD_CODEX_PATH = FAKE_CODEX;
+  await startSignin('codex');
+  await until(async () => (await getStatus('codex')).signin.url === 'https://auth.openai.com/oauth/authorize?x=1');
+  assert.equal((await getStatus('claude')).signin.state, 'idle', 'Claude is unaffected');
+  await until(async () => (await getStatus('codex')).signedIn);
+});
+
+test('ChatGPT: there is nothing for "install" to run, so it does nothing', async () => {
+  startInstall(undefined, 'codex');
+  assert.deepEqual((await getStatus('codex')).install, { state: 'idle' });
+});

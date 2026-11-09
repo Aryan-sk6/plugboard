@@ -6,6 +6,8 @@ import { createApp } from '../src/server.ts';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { writeProvider } from '../src/settings.ts';
 import { makeClaudeHome, goodRecipe, storeScreens } from './fixture.ts';
 
 // AI calls replaced with fixed answers; this only checks the HTTP wiring.
@@ -156,4 +158,55 @@ test('records of one helper are invisible to another', async () => {
   const otherList = JSON.parse((await get(`/api/records?id=${encodeURIComponent(other)}&collection=customers`)).body).records;
   assert.ok(!otherList.some((r: any) => r.label === 'Private Pat'));
   assert.equal((await get(`/api/records?id=${encodeURIComponent(mine)}&collection=../../x`)).status, 400);
+});
+
+test('the Connect screen can switch between Claude and ChatGPT, and the choice is remembered', async () => {
+  const first = JSON.parse((await get('/api/setup/status')).body);
+  assert.equal(first.current, 'claude');
+  assert.deepEqual(first.choices.map((c: any) => c.id), ['claude', 'codex']);
+  const switched = JSON.parse((await post('/api/settings', { provider: 'codex' })).body);
+  assert.equal(switched.current, 'codex');
+  assert.deepEqual([switched.provider.label, switched.provider.canInstall], ['ChatGPT', false]);
+  assert.match(switched.provider.installHelp.url, /openai\.com/);
+  assert.equal(JSON.parse((await get('/api/info')).body).provider, 'ChatGPT');
+  assert.equal(JSON.parse((await get('/api/setup/status')).body).provider.id, 'codex', 'default is the chosen AI');
+  const other = JSON.parse((await get('/api/setup/status?provider=claude')).body);
+  assert.deepEqual([other.provider.id, other.current], ['claude', 'codex'], 'asking about one AI does not change the choice');
+  assert.equal((await post('/api/settings', { provider: 'gpt-9' })).status, 400);
+  assert.equal(JSON.parse((await get('/api/setup/status')).body).current, 'codex', 'a bad request changes nothing');
+  await post('/api/settings', { provider: 'claude' });
+});
+
+test('with ChatGPT chosen, screens are designed and buttons run through Codex, never Claude', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'plugboard-codex-app-'));
+  writeProvider(dir, 'codex');
+  const reply = JSON.stringify({ ...goodRecipe(), screens: [...goodRecipe().screens, ...storeScreens()] });
+  const old = { ...process.env };
+  Object.assign(process.env, {
+    PLUGBOARD_CODEX_PATH: fileURLToPath(new URL('./fake-codex.mjs', import.meta.url)),
+    PLUGBOARD_CLAUDE_PATH: join(tmpdir(), 'claude-must-not-be-used.exe'),
+    FAKE_MODE: 'reply',
+    FAKE_CODEX_REPLY: reply,
+  });
+  const app = createApp({ claudeHome: await makeClaudeHome(), examplesDir: '', dataDir: dir });
+  await new Promise<void>((r) => app.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${(app.address() as AddressInfo).port}`;
+  try {
+    const items = (await (await fetch(`${base}/api/plugins`)).json()).items;
+    const id = items.find((i: any) => i.name === 'invoice-maker').id;
+    const recipe = await (await fetch(`${base}/api/recipe?id=${encodeURIComponent(id)}`)).json();
+    assert.equal(recipe.source, 'generated', recipe.notice);
+    assert.equal(recipe.recipe.title, 'Invoice maker');
+    const run = await fetch(`${base}/api/run`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id, screenId: 'main', actionId: 'make', values: { customer: 'Rosa', currency: 'EUR', lines: [{ item: 'Chair', price: 40 }] } }),
+    });
+    const last = JSON.parse((await run.text()).trim().split('\n').at(-1)!).result;
+    assert.equal(last.kind, 'text', JSON.stringify(last));
+    assert.ok(last.text.startsWith('{'), 'the answer came from the fake Codex');
+  } finally {
+    app.close();
+    for (const k of ['PLUGBOARD_CODEX_PATH', 'PLUGBOARD_CLAUDE_PATH', 'FAKE_MODE', 'FAKE_CODEX_REPLY']) old[k] === undefined ? delete process.env[k] : (process.env[k] = old[k]);
+  }
 });

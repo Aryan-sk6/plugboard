@@ -27,7 +27,7 @@ export const NOT_FOUND = "Claude isn't set up on this computer yet. Go to Connec
 export const NOT_SIGNED_IN = "Claude isn't signed in. Go to Connect Claude to sign in.";
 export const STOPPED = 'Stopped. Nothing else was done.';
 
-async function exists(p: string): Promise<boolean> {
+export async function exists(p: string): Promise<boolean> {
   try {
     return (await stat(p)).isFile();
   } catch {
@@ -36,7 +36,9 @@ async function exists(p: string): Promise<boolean> {
 }
 
 /** How to start a file: .js runs with this Node, a Windows npm .cmd shim runs its real target (spawning .cmd needs a shell, which mangles JSON args). */
-async function launcher(file: string): Promise<{ cmd: string; args: string[] } | null> {
+export type Launch = { cmd: string; args: string[] };
+
+export async function launcher(file: string): Promise<Launch | null> {
   const ext = extname(file).toLowerCase();
   if (ext === '.js' || ext === '.mjs' || ext === '.cjs') return { cmd: process.execPath, args: [file] };
   if (ext === '.cmd' || ext === '.bat') {
@@ -49,7 +51,7 @@ async function launcher(file: string): Promise<{ cmd: string; args: string[] } |
 }
 
 /** Finds the claude program: PLUGBOARD_CLAUDE_PATH, then PATH, then the native installer's folder. */
-export async function findClaude(): Promise<{ cmd: string; args: string[] } | null> {
+export async function findClaude(): Promise<Launch | null> {
   if (process.env.PLUGBOARD_CLAUDE_PATH) return launcher(process.env.PLUGBOARD_CLAUDE_PATH);
   const names = process.platform === 'win32' ? ['claude.exe', 'claude.cmd'] : ['claude'];
   const dirs = [...(process.env.PATH ?? '').split(delimiter).filter(Boolean), join(homedir(), '.local', 'bin')];

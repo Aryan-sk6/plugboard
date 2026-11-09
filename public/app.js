@@ -2,6 +2,7 @@ import { renderRecipe, renderResult } from './renderer.js';
 
 // Plugboard screens. Plugin text and AI recipes are untrusted: only ever set with textContent, never as HTML.
 const app = document.getElementById('app');
+let aiLabel = 'Claude'; // name of the AI helpers run through; updated from the server
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -38,9 +39,9 @@ function renderList(items, connected) {
   app.replaceChildren();
   if (!connected) {
     const banner = el('div', 'notice banner');
-    const link = el('a', 'button', 'Connect Claude');
+    const link = el('a', 'button', 'Connect your AI');
     link.href = '#setup';
-    banner.append(el('span', null, 'Connect your Claude account to start using these helpers.'), link);
+    banner.append(el('span', null, `Connect your ${aiLabel} account to start using these helpers.`), link);
     app.append(banner);
   }
   if (items.length === 0) {
@@ -87,7 +88,7 @@ async function runHelper(item, screen, action, values, results, form) {
   const box = el('section', 'panel result');
   box.setAttribute('aria-live', 'polite');
   const kind = action.kind || 'run';
-  const status = el('p', 'status', kind === 'save' ? 'Saving…' : kind === 'list' ? 'Loading…' : 'Claude is working on it… This can take a minute.');
+  const status = el('p', 'status', kind === 'save' ? 'Saving…' : kind === 'list' ? 'Loading…' : `${aiLabel} is working on it… This can take a minute.`);
   const live = el('div', 'result-text');
   const stopBtn = el('button', 'secondary', 'Stop');
   stopBtn.type = 'button';
@@ -121,7 +122,7 @@ async function runHelper(item, screen, action, values, results, form) {
         const msg = JSON.parse(l);
         if (msg.type === 'progress') {
           if (msg.text) live.textContent += msg.text; // shown as plain text only
-          if (msg.chars) status.textContent = `Claude is writing… (${msg.chars.toLocaleString()} characters so far)`;
+          if (msg.chars) status.textContent = `${aiLabel} is writing… (${msg.chars.toLocaleString()} characters so far)`;
         }
         if (msg.type === 'result') result = msg.result;
       }
@@ -169,7 +170,7 @@ async function openTool(id) {
   }
 }
 
-// ---- Connect Claude screen ----
+// ---- Connect your AI screen ----
 
 let pollTimer = null;
 let lastShown = '';
@@ -199,36 +200,67 @@ function renderSetup(s, returnTo) {
   const key = JSON.stringify(s);
   if (key === lastShown) return;
   lastShown = key;
+  const L = s.provider.label;
   app.replaceChildren();
   const back = el('a', 'back', '← All helpers');
   back.href = '#';
-  app.append(back, el('h2', 'tool-title', 'Connect Claude'),
-    el('p', 'lede', 'Plugboard uses your own Claude account to do the work. You need a paid Claude plan (Pro, Max or higher). Your sign-in stays with Claude; Plugboard never sees your password.'));
+  // Which AI to use. Picking one saves the choice, so helpers run through it from now on.
+  const picker = el('div', 'tabs');
+  picker.setAttribute('role', 'radiogroup');
+  picker.setAttribute('aria-label', 'Which AI do you want to use?');
+  for (const c of s.choices) {
+    const b = el('button', 'tab', c.label);
+    b.type = 'button';
+    b.setAttribute('role', 'radio');
+    b.setAttribute('aria-checked', String(c.id === s.current));
+    b.addEventListener('click', async () => {
+      try {
+        await getJson('/api/settings', { provider: c.id });
+      } catch (err) {
+        return showSetup({ error: err.message });
+      }
+      lastShown = '';
+      poll(returnTo);
+    });
+    picker.append(b);
+  }
+  app.append(back, el('h2', 'tool-title', 'Connect your AI'), el('p', 'muted', 'Which AI do you want to use?'), picker,
+    el('p', 'lede', `Plugboard uses your own ${L} account to do the work. You need ${s.provider.plan}. Your sign-in stays with ${L}; Plugboard never sees your password.`));
+  if (s.provider.notice) app.append(el('p', 'notice', s.provider.notice));
   if (s.error) app.append(el('p', 'status error', s.error));
 
   if (s.installed && s.signedIn) {
     const go = el('a', 'button', 'Continue');
     go.href = returnTo || '#';
-    app.append(step('✓ Claude is connected', el('p', 'muted', 'You are ready to use your helpers.'), go));
+    app.append(step(`✓ ${L} is connected`, el('p', 'muted', 'You are ready to use your helpers.'), go));
     return;
   }
 
   if (!s.installed) {
     const parts = [];
-    if (s.install.state === 'running') {
-      parts.push(el('p', 'status', 'Installing Claude… This usually takes a minute or two. Keep this page open.'));
+    if (!s.provider.canInstall) {
+      // Plugboard has no installer for this one: explain, link, and keep checking by itself.
+      const link = el('a', null, s.provider.installHelp.url);
+      link.href = s.provider.installHelp.url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      const p = el('p', 'muted', 'Instructions: ');
+      p.append(link);
+      parts.push(el('p', null, s.provider.installHelp.text), p, el('p', 'status', `Waiting for ${L} to be installed…`));
+    } else if (s.install.state === 'running') {
+      parts.push(el('p', 'status', `Installing ${L}… This usually takes a minute or two. Keep this page open.`));
     } else {
-      parts.push(el('p', 'muted', 'Claude is not on this computer yet. This downloads the official Claude Code program from claude.ai.'));
+      parts.push(el('p', 'muted', `${L} is not on this computer yet. Plugboard can download the official program for you.`));
       if (s.install.state === 'failed') parts.push(el('p', 'status error', s.install.message));
-      parts.push(actionButton(s.install.state === 'failed' ? 'Try again' : 'Install Claude', () => getJson('/api/setup/install', {}).then(() => poll(returnTo))));
+      parts.push(actionButton(s.install.state === 'failed' ? 'Try again' : `Install ${L}`, () => getJson('/api/setup/install', {}).then(() => poll(returnTo))));
     }
-    app.append(step('Step 1: Install Claude', ...parts));
+    app.append(step(`Step 1: Install ${L}`, ...parts));
     return;
   }
 
   const parts = [];
   if (s.signin.state === 'running') {
-    parts.push(el('p', null, 'A Claude sign-in page should have opened in your browser. Sign in there, then come back to this page.'));
+    parts.push(el('p', null, `A ${L} sign-in page should have opened in your browser. Sign in there, then come back to this page.`));
     if (s.signin.url) {
       const link = el('a', null, 'Open the sign-in page');
       link.href = s.signin.url;
@@ -254,11 +286,11 @@ function renderSetup(s, returnTo) {
     }
     parts.push(el('p', 'status', 'Waiting for you to finish signing in…'));
   } else {
-    parts.push(el('p', 'muted', 'Claude is installed. Now sign in with your Claude account.'));
+    parts.push(el('p', 'muted', `${L} is installed. Now sign in with your ${L} account.`));
     if (s.signin.state === 'failed') parts.push(el('p', 'status error', s.signin.message));
-    parts.push(actionButton('Sign in to Claude', () => getJson('/api/setup/signin', {}).then(() => poll(returnTo))));
+    parts.push(actionButton(`Sign in to ${L}`, () => getJson('/api/setup/signin', {}).then(() => poll(returnTo))));
   }
-  app.append(step('✓ Claude is installed'), step('Step 2: Sign in', ...parts));
+  app.append(step(`✓ ${L} is installed`), step('Step 2: Sign in', ...parts));
 }
 
 let showSetup = () => {};
@@ -268,6 +300,7 @@ async function poll(returnTo) {
   if (!/^#(setup|tool=)/.test(location.hash)) return;
   try {
     const s = await getJson('/api/setup/status');
+    aiLabel = s.provider.label;
     showSetup = (extra) => renderSetup({ ...s, ...extra }, returnTo);
     renderSetup(s, returnTo);
     if (s.installed && s.signedIn) return;
@@ -283,14 +316,21 @@ async function route() {
   window.scrollTo(0, 0);
   const m = /^#tool=(.+)$/.exec(location.hash);
   if (location.hash === '#setup') return poll('#');
-  app.replaceChildren(el('p', 'status', m ? 'Checking Claude…' : 'Looking for your AI helpers…'));
+  app.replaceChildren(el('p', 'status', m ? 'Checking your AI…' : 'Looking for your AI helpers…'));
   try {
     const status = await getJson('/api/setup/status');
+    aiLabel = status.provider.label;
     const connected = status.installed && status.signedIn;
     if (m) return connected ? openTool(decodeURIComponent(m[1])) : poll(location.hash);
     renderList((await getJson('/api/plugins')).items, connected);
     const { dataDir } = await getJson('/api/info').catch(() => ({}));
-    if (dataDir) app.append(el('p', 'muted small footer-note', `Your saved records are kept on this computer in: ${dataDir}. Back up this folder to keep them safe.`));
+    if (dataDir) {
+      const note = el('p', 'muted small footer-note', `Your saved records are kept on this computer in: ${dataDir}. Back up this folder to keep them safe. Helpers are run by ${aiLabel}. `);
+      const change = el('a', null, 'Change');
+      change.href = '#setup';
+      note.append(change);
+      app.append(note);
+    }
   } catch (err) {
     showError(err.message);
   }

@@ -7,6 +7,8 @@ import { listPlugins, readInstructions } from './reader.ts';
 import { getRecipe, type GeneratorDeps } from './generator.ts';
 import { getStatus, startInstall, startSignin, sendSigninCode } from './setup.ts';
 import { runAction, type Adapter, type RunResult } from './runner.ts';
+import { PROVIDERS, isProviderId, type ProviderId } from './providers.ts';
+import { readProvider, writeProvider } from './settings.ts';
 import { Store, recordLabel } from './store.ts';
 import { defaultDataDir } from './paths.ts';
 import { resolvePicks, toRecord, recordsTable, recordsForPrompt } from './records.ts';
@@ -88,6 +90,32 @@ function dataDir(opts: Options): string {
   return opts.dataDir ?? defaultDataDir();
 }
 
+/** Which AI the user chose (Claude unless they picked ChatGPT on the Connect screen). */
+function currentProvider(opts: Options): ProviderId {
+  return readProvider(dataDir(opts));
+}
+
+function adapterFor(opts: Options): Adapter {
+  return opts.adapter ?? PROVIDERS[currentProvider(opts)].adapter;
+}
+
+/** The AI call used to design screens: the test stand-in if given, otherwise the chosen AI. */
+function askFor(opts: Options): GeneratorDeps['ask'] {
+  return opts.ask ?? ((o) => adapterFor(opts).ask(o));
+}
+
+/** Setup status for one AI (the requested one, or the current one), plus what the screen needs to describe it. */
+async function statusFor(opts: Options, requested: unknown) {
+  const id = isProviderId(requested) ? requested : currentProvider(opts);
+  const p = PROVIDERS[id];
+  return {
+    ...(await getStatus(id)),
+    provider: { id, label: p.label, plan: p.plan, notice: p.notice ?? null, canInstall: Boolean(p.installCommand), installHelp: p.installHelp },
+    current: currentProvider(opts),
+    choices: Object.values(PROVIDERS).map((x) => ({ id: x.id, label: x.label })),
+  };
+}
+
 /** The user's helpers plus Plugboard's examples ("" turns examples off, for tests). */
 function helpers(opts: Options) {
   return listPlugins(opts.claudeHome, opts.examplesDir === '' ? undefined : (opts.examplesDir ?? EXAMPLES));
@@ -109,7 +137,7 @@ function resultForRecord(r: RunResult): unknown {
 async function run(req: IncomingMessage, res: ServerResponse, body: any, opts: Options) {
   const item = await findHelper(opts, body?.id);
   if (!item) return json(res, 404, { error: GONE });
-  const { recipe } = await getRecipe(item, { dataDir: dataDir(opts), ask: opts.ask });
+  const { recipe } = await getRecipe(item, { dataDir: dataDir(opts), ask: askFor(opts) });
   const screen = recipe.screens.find((s) => s.id === body.screenId);
   const action = screen?.actions.find((a) => a.id === body.actionId);
   if (!screen || !action) return json(res, 409, { error: 'This screen has changed. Please refresh the page and try again.' });
@@ -143,7 +171,7 @@ async function run(req: IncomingMessage, res: ServerResponse, body: any, opts: O
     const saved = action.uses ? recordsForPrompt(action.uses, store.list(item.id, action.uses)) : undefined;
     result = await runAction(
       { item, instructions: await readInstructions(item), screen, action, values, saved },
-      { adapter: opts.adapter, signal: stop.signal, onProgress: (p) => line({ ...p, kind: p.type, type: 'progress' }) },
+      { adapter: adapterFor(opts), signal: stop.signal, onProgress: (p) => line({ ...p, kind: p.type, type: 'progress' }) },
     );
     const keep = resultForRecord(result);
     if (action.saveTo && keep !== undefined) {
@@ -164,13 +192,19 @@ export function createApp(opts: Options = {}) {
       if (req.method === 'POST') {
         if (!sameSite(req)) return json(res, 403, { error: 'Not allowed.' });
         const body = await readBody(req);
+        const which = isProviderId(body?.provider) ? body.provider : currentProvider(opts);
         if (url.pathname === '/api/setup/install') {
-          startInstall();
-          return json(res, 200, await getStatus());
+          startInstall(undefined, which);
+          return json(res, 200, await statusFor(opts, which));
         }
         if (url.pathname === '/api/setup/signin') {
-          await startSignin();
-          return json(res, 200, await getStatus());
+          await startSignin(which);
+          return json(res, 200, await statusFor(opts, which));
+        }
+        if (url.pathname === '/api/settings') {
+          if (!isProviderId(body?.provider)) return json(res, 400, { error: 'Please pick Claude or ChatGPT.' });
+          writeProvider(dataDir(opts), body.provider);
+          return json(res, 200, await statusFor(opts, body.provider));
         }
         if (url.pathname === '/api/run') return run(req, res, body, opts);
         if (url.pathname === '/api/records/delete') {
@@ -181,16 +215,16 @@ export function createApp(opts: Options = {}) {
           return ok ? json(res, 200, { ok: true }) : json(res, 404, { error: 'That record was already deleted.' });
         }
         if (url.pathname === '/api/setup/code') {
-          if (!sendSigninCode(String(body?.code ?? ''))) return json(res, 400, { error: "That code didn't work. Copy it again from the sign-in page and paste it here." });
+          if (!sendSigninCode(String(body?.code ?? ''), which)) return json(res, 400, { error: "That code didn't work. Copy it again from the sign-in page and paste it here." });
           return json(res, 200, { ok: true });
         }
         return json(res, 404, { error: 'Not found.' });
       }
       if (req.method !== 'GET') return json(res, 405, { error: 'Not allowed.' });
 
-      if (url.pathname === '/api/setup/status') return json(res, 200, await getStatus());
+      if (url.pathname === '/api/setup/status') return json(res, 200, await statusFor(opts, url.searchParams.get('provider')));
 
-      if (url.pathname === '/api/info') return json(res, 200, { dataDir: dataDir(opts) });
+      if (url.pathname === '/api/info') return json(res, 200, { dataDir: dataDir(opts), provider: PROVIDERS[currentProvider(opts)].label });
 
       if (url.pathname === '/api/plugins') return json(res, 200, { items: await helpers(opts) });
 
@@ -205,7 +239,7 @@ export function createApp(opts: Options = {}) {
       if (url.pathname === '/api/recipe') {
         const item = (await helpers(opts)).find((i) => i.id === url.searchParams.get('id'));
         if (!item) return json(res, 404, { error: "This helper isn't on this computer any more. Go back and pick another one." });
-        return json(res, 200, { item, ...(await getRecipe(item, { dataDir: dataDir(opts), ask: opts.ask })) });
+        return json(res, 200, { item, ...(await getRecipe(item, { dataDir: dataDir(opts), ask: askFor(opts) })) });
       }
 
       const rel = decodeURIComponent(url.pathname.slice(1)) + (url.pathname.endsWith('/') ? 'index.html' : '');

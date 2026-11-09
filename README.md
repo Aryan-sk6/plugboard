@@ -7,7 +7,7 @@ follow-up emails. Normally you use them by typing. Plugboard shows each one as a
 and it remembers things between uses, like your customers and your stock.
 
 - It runs **on your own computer**. There is nothing to sign up for.
-- It uses **your own Claude account**. Plugboard never sees your password.
+- It uses **your own Claude or ChatGPT account**, whichever you have. Plugboard never sees your password.
 - It is free and open source (MIT license). *Plugboard is a working name.*
 
 ![Your helpers](docs/screenshots/1-helpers.png)
@@ -17,7 +17,7 @@ and it remembers things between uses, like your customers and your stock.
 ## What you need
 
 1. **A computer** running Windows, Mac or Linux. *(So far it has only been tried on Windows. Mac and Linux should work, but nobody has checked yet.)*
-2. **A paid Claude plan** (Pro, Max or higher). The free Claude plan does not work.
+2. **A paid Claude plan** (Pro, Max or higher), **or** a **ChatGPT account that includes Codex** (for example Plus or Pro). The free Claude plan does not work.
 3. **Node.js**, a free program that Plugboard runs on. Step 1 below shows how to get it.
 
 ## Install and start
@@ -47,24 +47,37 @@ To stop Plugboard, close that window.
 
 *(Windows may ask whether you really want to run the file, or say "Windows protected your PC". That is normal for files from the internet. Click **More info**, then **Run anyway** (or **Run**). See Troubleshooting if a Mac or Linux computer won't open the file.)*
 
-### Step 4: Connect Claude (once)
+### Step 4: Connect your AI (once)
 
-The first time, Plugboard asks you to connect Claude. Just follow the screen:
+The first time, Plugboard asks you to connect an AI. Pick the one you have an account with, then follow the screen.
+**If you have both, pick Claude.** It is the safer choice (see "Your information" below).
+
+**Claude:**
 
 1. Click **Install Claude** if you see it. This downloads Claude's official program and takes a minute or two.
 2. Click **Sign in to Claude**. Claude's own sign-in page opens in your browser. Sign in there. If the page shows you a code, paste it into the box in Plugboard.
 3. When you see **Claude is connected**, click **Continue**.
 
-![Install Claude](docs/screenshots/2-install-claude.png)
-![Sign in](docs/screenshots/3-sign-in.png)
+![Install Claude](docs/screenshots/2-install-claude.jpg)
+![Sign in](docs/screenshots/3-sign-in.jpg)
+
+**ChatGPT:**
+
+1. Click **ChatGPT**. If Codex (OpenAI's program) isn't on your computer yet, Plugboard shows a link with instructions. It can't install Codex for you. This page notices by itself once it is installed.
+2. Click **Sign in to ChatGPT**. OpenAI's own sign-in page opens in your browser. Sign in there.
+3. When you see **ChatGPT is connected**, click **Continue**.
+
+![ChatGPT is connected](docs/screenshots/6-chatgpt.jpg)
+
+You can switch at any time: click **Change** at the bottom of the first page.
 
 ## Using a helper
 
 1. **Click a helper** on the first page. Plugboard shows the skills you have added to Claude, plus three examples to try:
    *Customer follow-up*, *Inventory* and *Invoicing*.
-2. **The first time you open a helper, wait a moment.** Claude designs its screen, which takes about 10 to 20 seconds. After that the screen is saved and opens instantly.
+2. **The first time you open a helper, wait a moment.** Your AI designs its screen, which takes about 10 to 20 seconds with Claude and up to a minute with ChatGPT. After that the screen is saved and opens instantly.
 3. **Fill in the boxes** and click the button. A line under each button tells you what it does.
-4. **Watch the answer appear.** You can press **Stop** at any time.
+4. **Watch the answer appear.** With Claude the words appear as they are written; with ChatGPT the whole answer appears at once when it is ready. You can press **Stop** at any time.
 
 ![Filling in a form](docs/screenshots/4-fill-in-form.jpg)
 
@@ -78,7 +91,7 @@ Answers show up as text, as a table (with a button to download it as a spreadshe
 
 | Example | What it does |
 |---|---|
-| **Customer follow-up** | Keeps a customer list. Pick a customer and Claude writes a friendly email for you to copy and send. |
+| **Customer follow-up** | Keeps a customer list. Pick a customer and your AI writes a friendly email for you to copy and send. |
 | **Inventory** | Keeps a stock list. Press one button to see what you should reorder, as a table. |
 | **Invoicing** | Fills in an invoice, works out the totals, and gives you a file to download. It also keeps a list of your invoices. |
 
@@ -92,10 +105,12 @@ Plugboard only reads them. It never changes, moves or deletes anything in your C
 - **Saved records** (customers, stock, invoices) live in a folder called **Plugboard** inside your **Documents** folder.
   Plugboard shows the exact place at the bottom of the first page. **Back this folder up** to keep your records safe.
   If your Documents folder syncs with OneDrive or iCloud, the records sync too.
-- **What leaves your computer:** when you press a button, the helper's instructions and the answers you typed are sent to Claude, the same as if you typed them into Claude yourself.
+- **What leaves your computer:** when you press a button, the helper's instructions and the answers you typed are sent to your AI (Claude or ChatGPT), the same as if you typed them in yourself.
   Plugboard itself has no servers, no accounts and no tracking.
-- **The AI can only write text.** It cannot open your files, browse the web, or send emails. When a helper would send an email or save a file, Plugboard gives you the text to send or the file to download yourself.
-- Your Claude plan's usage limits apply. If you reach a limit, Plugboard shows Claude's message and does not try to get around it.
+- **The AI is only meant to write text.** When a helper would send an email or save a file, Plugboard gives you the text to send or the file to download yourself.
+  - **With Claude,** the AI has no tools at all: it cannot open your files, browse the web, or send anything.
+  - **With ChatGPT,** Codex can't be made completely text-only. Plugboard runs it in read-only mode, in an empty temporary folder, with web search and its other tools switched off as far as Codex allows, and it ignores your own Codex settings. In our tests (on Windows) it could not read a test file. But it is **reduced access, not zero access**, so with ChatGPT only use helpers you trust (like the three examples, or ones you wrote).
+- Your plan's usage limits apply. If you reach a limit, Plugboard shows your AI's message and does not try to get around it.
 
 ## Troubleshooting
 
@@ -111,15 +126,19 @@ Plugboard only reads them. It never changes, moves or deletes anything in your C
 
 **Linux: the start file opens in a text editor.** Open a terminal in the Plugboard folder and type `sh start-plugboard.sh`.
 
-**"Claude isn't set up on this computer yet" or "Claude isn't signed in".** Click **Connect Claude** and follow the steps.
+**"Claude isn't set up on this computer yet", "Claude isn't signed in", or the same for ChatGPT.** Click **Connect your AI** and follow the steps.
 
 **Installing Claude failed.** Check your internet connection and try again. Some work computers block the download. In that case, install Claude yourself from https://code.claude.com/docs/en/setup, then come back.
 
+**I picked ChatGPT but Plugboard can't find Codex.** Plugboard can't install Codex for you. Install the Codex app or program from OpenAI (https://developers.openai.com/codex), then come back. The page notices by itself.
+
 **The sign-in page didn't open.** Click **Open the sign-in page** in Plugboard. If you can't find it, make sure your browser isn't blocking pop-ups.
 
-**Claude says you've hit a usage limit.** Wait until the time it gives, then try again. Plugboard can't change this.
+**My AI says I've hit a usage limit.** Wait until the time it gives, then try again. Plugboard can't change this.
 
-**"Claude took too long to answer".** Try again. Shorter answers are quicker.
+**"Claude took too long to answer" (or ChatGPT).** Try again. Shorter answers are quicker.
+
+**I want to switch between Claude and ChatGPT.** Click **Change** at the bottom of the first page. Screens that were already designed are kept and work with either one.
 
 **A helper's screen asks too many questions, or looks wrong.** Close Plugboard, open your **Plugboard** folder in Documents, delete the folder called `recipes` inside it, and start Plugboard again. Claude will design fresh screens. Your saved records are not deleted. (A new screen may word its boxes a little differently, so older records can look slightly different in lists.)
 
@@ -129,7 +148,8 @@ Plugboard only reads them. It never changes, moves or deletes anything in your C
 
 ## Known limits
 
-- ChatGPT / Codex is not supported yet. Only Claude works.
+- ChatGPT mode is newer and less strict than Claude mode (see "Your information"), and its answers arrive all at once instead of word by word.
+- Plugboard can install Claude for you, but not Codex.
 - You can upload text files only (like `.txt`, `.csv`, `.md`), up to 200 KB.
 - Plugboard has not been tried on Mac or Linux yet.
 - Saved lists show the newest 500 records.
@@ -147,11 +167,13 @@ npm run typecheck
 ```
 
 - `src/reader.ts` finds skills, commands and plugins (read-only). `src/recipe.ts` defines the screen format and its checks.
-  `src/generator.ts` asks Claude for a screen and caches it. `public/renderer.js` draws a fixed set of components.
-  `src/runner.ts` runs a button press through `src/claude.ts`. `src/store.ts` is the SQLite store (Node's built-in `node:sqlite`).
+  `src/generator.ts` asks your AI for a screen and caches it. `public/renderer.js` draws a fixed set of components.
+  `src/runner.ts` runs a button press through an adapter: `src/claude.ts` (Claude Code) or `src/codex.ts` (Codex).
+  `src/providers.ts` lists the two AIs and `src/setup.ts` handles install and sign-in. `src/store.ts` is the SQLite store (Node's built-in `node:sqlite`).
 - The AI never writes screen code. It returns JSON that is checked against a fixed format, and anything invalid falls back to a plain text box.
-- Plugin text is treated as untrusted data. The AI runs with no tools (`--tools ""`, `--safe-mode`).
-- Set `PLUGBOARD_DATA` to keep records somewhere else. Set `PLUGBOARD_CLAUDE_PATH` to use a specific `claude` program.
-- The Codex adapter in `src/runner.ts` is a labelled stub.
+- Plugin text is treated as untrusted data. Claude runs with no tools (`--tools ""`, `--safe-mode`).
+  Codex has no such switch, so `codexArgs()` in `src/codex.ts` layers: read-only sandbox, ephemeral, user config and rules ignored, web search off, an empty temporary working folder, and every tool-giving feature from `DISABLED_FEATURES` switched off.
+  The remaining Codex tools are reduced, not removed; see the comment at the top of that file for what was and wasn't checked.
+- Set `PLUGBOARD_DATA` to keep records somewhere else. Set `PLUGBOARD_CLAUDE_PATH` or `PLUGBOARD_CODEX_PATH` to use a specific program.
 
 License: MIT. See `LICENSE`.
