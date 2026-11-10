@@ -93,3 +93,15 @@ test('two requests at once share one AI call', async () => {
   assert.equal(s.calls.length, 1);
   assert.deepEqual(a, b);
 });
+
+test('the saved look is available to the menu once a helper has been designed, and not before', async () => {
+  const { cachedLook } = await import('../src/generator.ts');
+  const { item, dataDir } = await setup();
+  assert.equal(await cachedLook(item, dataDir), undefined, 'not designed yet');
+  const withLook = { ...goodRecipe(), look: { color: 'rose', icon: 'users' } };
+  await getRecipe(item, { dataDir, ask: scripted([{ ok: true, text: '', structured: withLook }]).ask });
+  assert.deepEqual(await cachedLook(item, dataDir), { color: 'rose', icon: 'users' });
+  const plain = await setup();
+  await getRecipe(plain.item, { dataDir: plain.dataDir, ask: scripted([{ ok: true, text: '', structured: goodRecipe() }]).ask });
+  assert.equal(await cachedLook(plain.item, plain.dataDir), undefined, 'a design without a look has none');
+});

@@ -54,6 +54,57 @@ export function fileProblem(name, size) {
   return null;
 }
 
+// ---------- layout and look helpers (pure, so they can be tested in Node) ----------
+
+export const LAYOUTS = ['form', 'split', 'data', 'steps'];
+export const SHOW_STYLES = ['plain', 'document', 'email'];
+
+/** Groups a screen's fields into sections by their "section" heading. A field without one joins the section before it. */
+export function sectionsOf(screen) {
+  const out = [];
+  for (const f of screen.fields) {
+    const title = f.section ? String(f.section) : null;
+    const last = out[out.length - 1];
+    if (last && (title === null || title === last.title)) last.fields.push(f);
+    else out.push({ title, fields: [f] });
+  }
+  return out;
+}
+
+/** The layout to use. One the screen can't support (no list for "data", under two sections for "steps") falls back to a plain form. */
+export function layoutOf(screen) {
+  const l = screen.layout;
+  if (l === 'data' && !screen.actions.some((a) => (a.kind ?? 'run') === 'list')) return 'form';
+  if (l === 'steps' && sectionsOf(screen).filter((s) => s.title).length < 2) return 'form';
+  return LAYOUTS.includes(l) ? l : 'form';
+}
+
+/** How a button's result is shown. Anything unknown is plain. */
+export function showOf(action) {
+  return SHOW_STYLES.includes(action?.show) ? action.show : 'plain';
+}
+
+/**
+ * Pulls "To:", "Subject:" and similar lines off the top of an email so they can be shown as a header.
+ * A short line or two before them ("Here is your email:") is kept apart as a preface. Without any header lines,
+ * the whole text is the body.
+ */
+export function parseEmail(text) {
+  const whole = String(text).replace(/\r\n?/g, '\n').trim();
+  const lines = whole.split('\n');
+  const isHeader = (l) => /^(to|from|cc|bcc|subject):\s*\S/i.test(l);
+  const start = lines.findIndex((l, i) => i < 6 && isHeader(l));
+  if (start < 0) return { preface: '', headers: [], body: whole, email: whole };
+  const headers = [];
+  let i = start;
+  for (; i < lines.length && isHeader(lines[i]); i++) {
+    const m = /^([a-z]+):\s*(.*)$/i.exec(lines[i]);
+    headers.push([m[1][0].toUpperCase() + m[1].slice(1).toLowerCase(), m[2].trim()]);
+  }
+  while (i < lines.length && !lines[i].trim()) i++;
+  return { preface: lines.slice(0, start).join(' ').trim(), headers, body: lines.slice(i).join('\n').trim(), email: lines.slice(start).join('\n').trim() };
+}
+
 /**
  * Splits AI text into simple blocks: headings, paragraphs, bullet/numbered lists and tables.
  * Only these shapes are recognised; anything else stays plain text. Nothing is ever treated as HTML.
@@ -161,7 +212,7 @@ function cellInput(type, label) {
 /** Builds one field. Returns { node, get, setError, focus, reload? }. */
 function buildField(f, opts = {}) {
   const id = `f${++uid}`;
-  const wrap = el('div', `field field-${f.type}`);
+  const wrap = el('div', `field field-${f.type}${f.width === 'half' ? ' half' : ''}`);
   const label = el('label', 'field-label', f.label);
   label.htmlFor = id;
   label.id = id + '-label';
@@ -402,16 +453,34 @@ export function confirmAction(action, title = 'Before this runs', yesLabel = 'Ye
   });
 }
 
+/** A button that copies text and says so. */
+function copyButton(getText, label = 'Copy') {
+  const copy = el('button', 'secondary', label);
+  copy.type = 'button';
+  copy.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(getText());
+      copy.textContent = 'Copied ✓';
+    } catch {
+      copy.textContent = 'Copy failed: select the text instead';
+    }
+  });
+  return copy;
+}
+
 /**
- * Renders a whole recipe: tabs if it has several screens, fields, and buttons.
- * onAction(screen, action, values) is called after the form checks out (and the user confirmed, if needed).
+ * Renders a whole recipe. Each screen gets its own layout ("form", "split", "data" or "steps": see layoutOf),
+ * its fields grouped into sections, and its own place for results.
+ * onAction(screen, action, values, slots, meta) is called after the form checks out (and the user confirmed, if needed).
+ *   slots = { results, toast }: where this screen shows results. toast only exists in the "data" layout, for "Saved" messages.
+ *   meta.auto is true for the saved list that the "data" layout loads by itself.
  * opts.loadRecords(collection) returns [{ id, label }] for "pick a saved record" fields.
  */
 export function renderRecipe(recipe, onAction, opts = {}) {
   const root = el('div', 'recipe');
   const screens = recipe.screens;
   let tabs = null;
-  const panels = [];
+  const panes = [];
   const reloaders = [];
   /** Refreshes every "pick a saved record" list, e.g. after something was saved or deleted. */
   root.refreshRecords = () => Promise.all(reloaders.map((r) => r()));
@@ -423,19 +492,87 @@ export function renderRecipe(recipe, onAction, opts = {}) {
   }
 
   screens.forEach((screen, i) => {
+    const layout = layoutOf(screen);
+    const pane = el('div', `screen layout-${layout}`);
     const panel = el('form', 'panel');
     panel.noValidate = true;
     panel.addEventListener('submit', (e) => e.preventDefault());
-    panel.append(el('h3', null, screen.title));
-    if (screen.intro) panel.append(el('p', 'muted', screen.intro));
-    const fields = screen.fields.map((f) => ({ f, ui: buildField(f, opts) }));
-    for (const { ui } of fields) {
-      panel.append(ui.node);
-      if (ui.reload) reloaders.push(ui.reload);
-    }
+    const head = el('div', 'panel-head');
+    head.append(el('h3', null, screen.title));
+    if (screen.intro) head.append(el('p', 'muted', screen.intro));
+    panel.append(head);
+
+    const fields = []; // { f, ui }
+    const sections = sectionsOf(screen).map((s) => {
+      const box = el('fieldset', 'section');
+      if (s.title) box.append(el('legend', null, s.title));
+      const grid = el('div', 'grid');
+      for (const f of s.fields) {
+        const ui = buildField(f, opts);
+        if (ui.reload) reloaders.push(ui.reload);
+        grid.append(ui.node);
+        fields.push({ f, ui });
+      }
+      box.append(grid);
+      panel.append(box);
+      return { ...s, box };
+    });
 
     const values = () => Object.fromEntries(fields.map(({ f, ui }) => [f.id, ui.get()]));
-    const row = el('div', 'action actions');
+    /** Shows each field's problem (or clears it). Returns the first field with a problem. */
+    const showErrors = (errors) => {
+      let first = null;
+      for (const item of fields) {
+        item.ui.setError(errors[item.f.id] || null);
+        if (errors[item.f.id] && !first) first = item;
+      }
+      return first;
+    };
+
+    const actionsRow = el('div', 'action actions');
+
+    // "steps": one section at a time, with Back and Next. The buttons appear on the last step.
+    let goTo = () => {};
+    if (layout === 'steps') {
+      const stepper = el('ol', 'stepper');
+      sections.forEach((s, n) => {
+        const li = el('li');
+        li.append(el('span', 'num', String(n + 1)), el('span', 'name', s.title || `Step ${n + 1}`));
+        stepper.append(li);
+      });
+      const back = el('button', 'secondary', 'Back');
+      const next = el('button', null, 'Next');
+      back.type = next.type = 'button';
+      let current = 0;
+      goTo = (n) => {
+        current = Math.max(0, Math.min(sections.length - 1, n));
+        sections.forEach((s, k) => (s.box.hidden = k !== current));
+        [...stepper.children].forEach((li, k) => {
+          li.classList.toggle('done', k < current);
+          if (k === current) li.setAttribute('aria-current', 'step');
+          else li.removeAttribute('aria-current');
+        });
+        back.hidden = current === 0;
+        next.hidden = current === sections.length - 1;
+        actionsRow.hidden = current !== sections.length - 1;
+      };
+      back.addEventListener('click', () => goTo(current - 1));
+      next.addEventListener('click', () => {
+        const first = showErrors(validateValues({ fields: sections[current].fields }, values()));
+        if (first) return first.ui.focus();
+        goTo(current + 1);
+      });
+      const nav = el('div', 'step-nav');
+      nav.append(back, next);
+      panel.insertBefore(stepper, sections[0].box);
+      panel.append(nav);
+    }
+
+    const listAction = screen.actions.find((a) => (a.kind ?? 'run') === 'list');
+    const slots = { results: el('div', 'results'), toast: layout === 'data' ? el('div', 'toast') : null };
+    if (layout === 'split') slots.results.dataset.placeholder = 'Your result will appear here.';
+    const runList = () => Promise.resolve(onAction(screen, listAction, {}, slots, { auto: true })).catch(() => {});
+
     for (const action of screen.actions) {
       const btn = el('button', null, action.label);
       btn.type = 'button';
@@ -445,28 +582,44 @@ export function renderRecipe(recipe, onAction, opts = {}) {
       btn.addEventListener('click', async () => {
         const vals = values();
         const errors = action.kind === 'list' ? {} : validateValues(screen, vals); // showing a list needs no answers
-        let first = null;
-        for (const { f, ui } of fields) {
-          ui.setError(errors[f.id] || null);
-          if (errors[f.id] && !first) first = ui;
+        const first = showErrors(errors);
+        if (first) {
+          if (layout === 'steps') goTo(sections.findIndex((s) => s.fields.includes(first.f)));
+          return first.ui.focus();
         }
-        if (first) return first.focus();
         btn.disabled = true; // also stops a second press from stacking a second "are you sure" box
         try {
           if (needsConfirm(action) && !(await confirmAction(action))) return;
-          await onAction(screen, action, vals);
+          await onAction(screen, action, vals, slots, {});
         } finally {
           btn.disabled = false;
           if (action.kind === 'save' || action.saveTo) root.refreshRecords();
+          if (layout === 'data' && listAction && action.kind === 'save') runList(); // keep the list on screen up to date
         }
       });
       const itemBox = el('div', 'action-item');
       itemBox.append(btn, desc);
-      row.append(itemBox);
+      if (layout === 'data' && action === listAction) itemBox.hidden = true; // that list is always shown and refreshes itself
+      actionsRow.append(itemBox);
     }
-    panel.append(row);
-    panels.push(panel);
-    root.append(panel);
+    panel.append(actionsRow);
+    if (slots.toast) panel.append(slots.toast);
+    if (layout === 'steps') goTo(0);
+
+    const formPane = el('div', 'pane-form');
+    formPane.append(panel);
+    const resultPane = el('div', 'pane-result');
+    resultPane.append(slots.results);
+    if (layout === 'data' && screen.fields.length === 0) {
+      // A saved list with nothing to fill in: no form card, just the title and the list across the page.
+      pane.classList.add('list-only');
+      resultPane.prepend(head);
+      pane.append(resultPane);
+    } else if (layout === 'data') pane.append(resultPane, formPane);
+    else pane.append(formPane, resultPane);
+    panes.push(pane);
+    root.append(pane);
+    if (layout === 'data' && listAction) setTimeout(runList, 0);
 
     if (tabs) {
       const tab = el('button', 'tab', screen.title);
@@ -478,11 +631,27 @@ export function renderRecipe(recipe, onAction, opts = {}) {
   });
 
   function show(i) {
-    panels.forEach((p, j) => (p.hidden = j !== i));
+    panes.forEach((p, j) => (p.hidden = j !== i));
     if (tabs) [...tabs.children].forEach((t, j) => t.setAttribute('aria-selected', String(j === i)));
   }
   show(0);
   return root;
+}
+
+/** An email as a mail card: To/Subject on top, the message below. */
+function emailCard(text) {
+  const { preface, headers, body } = parseEmail(text);
+  const wrap = el('div', 'mail-wrap');
+  if (preface) wrap.append(el('p', 'muted', preface));
+  const card = el('div', 'mail');
+  if (headers.length) {
+    const head = el('dl', 'mail-head');
+    for (const [k, v] of headers) head.append(el('dt', null, k), el('dd', null, v));
+    card.append(head);
+  }
+  card.append(renderMarkdown(body));
+  wrap.append(card);
+  return wrap;
 }
 
 /**
@@ -493,10 +662,12 @@ export function renderRecipe(recipe, onAction, opts = {}) {
  *   { kind: 'records', collection, columns, rows: [{ _id, ...}] }   saved records, with Delete buttons
  *   { kind: 'saved', text }
  *   { kind: 'error', text }
- * Any result may carry savedNote. opts.onDelete(row) is called when a saved record's Delete is confirmed.
+ * Any result may carry savedNote.
+ * opts.show ("plain", "document" or "email") says how to show text. opts.onDelete(row) runs when a saved record's Delete is confirmed.
  */
 export function renderResult(result, opts = {}) {
-  const box = el('section', 'panel result');
+  const show = SHOW_STYLES.includes(opts.show) ? opts.show : 'plain';
+  const box = el('section', `panel result result-${result.kind}`);
   box.setAttribute('aria-live', 'polite');
   const titles = { error: 'Something went wrong', saved: 'Saved', records: `Your saved ${result.collection || 'records'}` };
   box.append(el('h3', null, titles[result.kind] || 'Result'));
@@ -506,17 +677,17 @@ export function renderResult(result, opts = {}) {
     box.append(el('p', null, result.text));
     return box;
   }
-  if (result.note) box.append(el('p', null, result.note));
+  if (result.note) box.append(el('p', 'result-note', result.note));
   if (result.savedNote) box.append(el('p', 'notice', '✓ ' + result.savedNote));
 
   if (result.kind === 'saved') {
-    box.append(el('p', null, '✓ ' + result.text));
+    box.append(el('p', 'saved-line', '✓ ' + result.text));
     return box;
   }
 
   if (result.kind === 'table' || result.kind === 'records') {
     if (result.rows.length === 0) {
-      box.append(el('p', 'muted', 'Nothing saved here yet.'));
+      box.append(el('p', 'muted empty-note', 'Nothing saved here yet.'));
       return box;
     }
     const scroller = el('div', 'table-scroll');
@@ -528,7 +699,11 @@ export function renderResult(result, opts = {}) {
     table.tHead.append(head);
     for (const row of result.rows) {
       const tr = el('tr');
-      for (const c of result.columns) tr.append(el('td', null, row[c.id] == null ? '' : String(row[c.id])));
+      for (const c of result.columns) {
+        const v = row[c.id] == null ? '' : String(row[c.id]);
+        const td = el('td', /^[-+]?[$€£₹]?\s?[\d,]+(\.\d+)?%?$/.test(v) ? 'num' : v.length <= 16 ? 'short' : null, v); // numbers line up on the right; short cells never break
+        tr.append(td);
+      }
       if (result.kind === 'records') {
         const del = el('button', 'link-button', 'Delete');
         del.type = 'button';
@@ -550,26 +725,33 @@ export function renderResult(result, opts = {}) {
   }
 
   if (result.kind === 'file') {
-    box.append(el('p', null, `Your file "${result.name}" is ready.`));
-    box.append(downloadLink(`Download ${result.name}`, result.name, result.text, result.mime || 'text/plain'));
-    const preview = el('pre', 'result-text');
-    preview.textContent = result.text.slice(0, 5000);
-    box.append(preview);
+    // A file is shown like a printed page, with its name and the download button on top.
+    box.classList.add('result-document');
+    const bar = el('div', 'toolbar');
+    bar.append(el('span', 'chip', result.name), downloadLink(`Download ${result.name}`, result.name, result.text, result.mime || 'text/plain'), copyButton(() => result.text));
+    const paper = el('div', 'paper');
+    const pre = el('pre', 'paper-text');
+    pre.textContent = result.text.slice(0, 20000);
+    paper.append(pre);
+    box.append(bar, paper);
     return box;
   }
 
-  const text = renderMarkdown(result.text);
-  const copy = el('button', 'secondary', 'Copy');
-  copy.type = 'button';
-  copy.addEventListener('click', async () => {
-    try {
-      await navigator.clipboard.writeText(result.text);
-      copy.textContent = 'Copied';
-    } catch {
-      copy.textContent = 'Copy failed: select the text instead';
-    }
-  });
-  box.append(text, copy);
+  if (show === 'email') {
+    box.classList.add('result-email');
+    box.append(emailCard(result.text));
+    box.append(copyButton(() => parseEmail(result.text).email, 'Copy email'));
+    return box;
+  }
+  if (show === 'document') {
+    box.classList.add('result-document');
+    const paper = el('div', 'paper');
+    paper.append(renderMarkdown(result.text));
+    box.append(paper, copyButton(() => result.text));
+    return box;
+  }
+
+  box.append(renderMarkdown(result.text), copyButton(() => result.text));
   return box;
 }
 

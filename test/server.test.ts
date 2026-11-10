@@ -48,6 +48,7 @@ test('serves the plugin list as JSON', async () => {
   assert.equal(r.status, 200);
   assert.match(r.type, /application\/json/);
   assert.equal(JSON.parse(r.body).items.length, 5);
+  assert.ok(JSON.parse(r.body).items.every((i: any) => 'look' in i), 'every helper carries its look (null until it has been designed)');
 });
 
 test('serves the list screen', async () => {

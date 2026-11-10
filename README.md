@@ -10,7 +10,7 @@ and it remembers things between uses, like your customers and your stock.
 - It uses **your own Claude or ChatGPT account**, whichever you have. Plugboard never sees your password.
 - It is free and open source (MIT license). *Plugboard is a working name.*
 
-![Your helpers](docs/screenshots/1-helpers.png)
+![Your helpers](docs/screenshots/1-helpers.jpg)
 
 ---
 
@@ -67,23 +67,34 @@ The first time, Plugboard asks you to connect an AI. Pick the one you have an ac
 2. Click **Sign in to ChatGPT**. OpenAI's own sign-in page opens in your browser. Sign in there.
 3. When you see **ChatGPT is connected**, click **Continue**.
 
-![ChatGPT is connected](docs/screenshots/6-chatgpt.jpg)
+![ChatGPT is connected](docs/screenshots/4-chatgpt.jpg)
 
-You can switch at any time: click **Change** at the bottom of the first page.
+You can switch at any time: click **Change** next to "Using …" at the bottom of the menu on the left.
 
 ## Using a helper
 
-1. **Click a helper** on the first page. Plugboard shows the skills you have added to Claude, plus three examples to try:
+The menu on the left lists all your helpers, and you can **search** it. The first page shows the three examples as big cards.
+**Every helper gets its own color, icon and layout**, so you can tell them apart at a glance.
+
+1. **Click a helper.** Plugboard shows the skills you have added to Claude, plus three examples to try:
    *Customer follow-up*, *Inventory* and *Invoicing*.
 2. **The first time you open a helper, wait a moment.** Your AI designs its screen, which takes about 10 to 20 seconds with Claude and up to a minute with ChatGPT. After that the screen is saved and opens instantly.
 3. **Fill in the boxes** and click the button. A line under each button tells you what it does.
 4. **Watch the answer appear.** With Claude the words appear as they are written; with ChatGPT the whole answer appears at once when it is ready. You can press **Stop** at any time.
 
-![Filling in a form](docs/screenshots/4-fill-in-form.jpg)
+Your AI decides how each screen looks, and picks from a fixed menu, so it can never break the page:
 
-Answers show up as text, as a table (with a button to download it as a spreadsheet), or as a file you can download.
+- **Step by step.** A long form is split into short steps with a progress line. Invoicing does this.
+- **A list beside a form.** Helpers that keep records show your saved list on the left, always up to date, with a small form to add or change one.
+- **A form beside its result.** The answer appears next to the form instead of far below it.
 
-![A result](docs/screenshots/5-result.jpg)
+![An invoice, step by step](docs/screenshots/5-invoice-wizard.jpg)
+
+![A saved list beside a form](docs/screenshots/6-customers.jpg)
+
+Results look like what they are: an **email** looks like an email (with To and Subject), an **invoice** looks like a printed page you can download, and a **table** can be downloaded as a spreadsheet.
+
+![An email, next to its form](docs/screenshots/7-email.jpg)
 
 **Always check amounts, dates and names before you send an invoice or an email.** The AI can make mistakes.
 
@@ -138,7 +149,7 @@ Plugboard only reads them. It never changes, moves or deletes anything in your C
 
 **"Claude took too long to answer" (or ChatGPT).** Try again. Shorter answers are quicker.
 
-**I want to switch between Claude and ChatGPT.** Click **Change** at the bottom of the first page. Screens that were already designed are kept and work with either one.
+**I want to switch between Claude and ChatGPT.** Click **Change** next to "Using …" at the bottom of the menu on the left. Screens that were already designed are kept and work with either one.
 
 **A helper's screen asks too many questions, or looks wrong.** Close Plugboard, open your **Plugboard** folder in Documents, delete the folder called `recipes` inside it, and start Plugboard again. Claude will design fresh screens. Your saved records are not deleted. (A new screen may word its boxes a little differently, so older records can look slightly different in lists.)
 
@@ -167,6 +178,7 @@ npm run typecheck
 ```
 
 - `src/reader.ts` finds skills, commands and plugins (read-only). `src/recipe.ts` defines the screen format and its checks.
+  `public/look.js` is the fixed menu of 8 colors and 17 icons. The screen format also lets the AI pick a layout (`form`, `split`, `data` or `steps`), group fields into sections, and choose how a result is shown (`plain`, `document` or `email`). All of it is optional and checked, and anything off the menu is ignored.
   `src/generator.ts` asks your AI for a screen and caches it. `public/renderer.js` draws a fixed set of components.
   `src/runner.ts` runs a button press through an adapter: `src/claude.ts` (Claude Code) or `src/codex.ts` (Codex).
   `src/providers.ts` lists the two AIs and `src/setup.ts` handles install and sign-in. `src/store.ts` is the SQLite store (Node's built-in `node:sqlite`).

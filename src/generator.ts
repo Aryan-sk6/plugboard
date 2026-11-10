@@ -3,11 +3,11 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
 import { join } from 'node:path';
 import { askClaude, type AskOptions, type CliResult } from './claude.ts';
-import { validateRecipe, schemaForModel, fallbackRecipe, type Recipe } from './recipe.ts';
+import { validateRecipe, schemaForModel, fallbackRecipe, type Look, type Recipe } from './recipe.ts';
 import { readInstructions, type PluginItem } from './reader.ts';
 
 /** Bump when the prompt or schema changes, so old cached recipes are regenerated. */
-export const GENERATOR_VERSION = 3;
+export const GENERATOR_VERSION = 4;
 const MAX_RETRIES = 2;
 // shortcut: very long skill files are cut to this size; raise it if real plugins lose important detail.
 const MAX_CHARS = 40_000;
@@ -48,7 +48,16 @@ If the tool works with things the user will want to keep and reuse, use these:
 List names are lowercase words like customers, invoices or stock. Only use these when they genuinely help.
 Every button uses and checks every field on its screen. So give each job its own screen with only the fields that job needs:
 for example one screen to add or update records (with its save and list buttons) and another screen for asking the AI (with only the fields the AI needs).
-Never put a "save" button and an AI button on the same screen.`;
+Never put a "save" button and an AI button on the same screen.
+
+Make it look good. Every helper is shown as its own small app, and different helpers should not all look the same:
+- "look" (for the whole helper): choose one color and one icon that suit what it does.
+  Colors: teal, blue, violet, orange, rose, green, amber, slate. (For example money and invoices: green; email and messages: blue or violet; stock and orders: orange; people: rose; reports: teal.)
+  Icons: receipt, box, mail, users, chart, calendar, tag, cart, clipboard, megaphone, wrench, book, heart, star, globe, file, sparkles.
+- "layout" (for each screen): "form" is the plain default. "split" shows the form on the left and the result on the right, which suits making an email, invoice or report. "data" shows the saved list first with a small add-or-update form beside it, and only works for a screen that has a "list" action (use it for screens that keep customers, stock, invoices and so on). "steps" shows one section at a time and only works when the fields are in two or more sections (use it for long forms of more than 6 fields).
+- "section" (on a field): a short heading such as "Customer", "Items" or "Payment". Give neighbouring fields the same section to group them. Every field on a screen should have a section when you use sections.
+- "width" (on a field): "half" puts short fields (dates, numbers, dropdowns, short text) side by side in pairs. Tables, long text and files should be "full".
+- "show" (on an action): "email" when the result is an email (start the text with To: and Subject: lines), "document" for invoices, letters and reports, otherwise "plain".`;
 
 export function hashInput(text: string): string {
   return createHash('sha256').update(`v${GENERATOR_VERSION}\n${text}`).digest('hex');
@@ -90,6 +99,15 @@ async function generate(item: PluginItem, text: string, ask: GeneratorDeps['ask'
     problems = { errors, previous: candidate === undefined ? res.text : JSON.stringify(candidate) };
   }
   return { notice: "The AI couldn't design a screen for this helper, so here is a simple text box instead." };
+}
+
+/** The saved color and icon of a helper's screen, if it has been designed already. Only for the menu, so any saved version will do. */
+export async function cachedLook(item: PluginItem, dataDir: string): Promise<Look | undefined> {
+  try {
+    return JSON.parse(await readFile(cacheFile(dataDir, item), 'utf8')).recipe?.look;
+  } catch {
+    return undefined; // not designed yet, or unreadable
+  }
 }
 
 const inFlight = new Map<string, Promise<RecipeResult>>();

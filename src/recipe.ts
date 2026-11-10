@@ -1,9 +1,16 @@
 // Screen recipe: the JSON the AI returns to describe a plugin's screens.
 // It is data only. The Renderer maps it onto a fixed set of components; nothing in it is ever executed.
 
+// @ts-ignore - plain JS shared with the browser, so the page and these checks use one menu of colors and icons
+import { COLORS, ICON_NAMES } from '../public/look.js';
+
 export const FIELD_TYPES = ['text', 'longtext', 'number', 'date', 'dropdown', 'checkbox', 'file', 'table', 'record'] as const;
 export const ACTION_KINDS = ['run', 'save', 'list'] as const;
 export const OUTPUT_TYPES = ['text', 'table', 'file'] as const;
+// The look menu. All of it is optional: a recipe without any of it still works, and the page picks a steady default.
+export const LAYOUTS = ['form', 'split', 'data', 'steps'] as const;
+export const SHOW_STYLES = ['plain', 'document', 'email'] as const;
+export const WIDTHS = ['half', 'full'] as const;
 
 export interface Column { id: string; label: string; type: 'text' | 'number' | 'date' }
 export interface Field {
@@ -17,6 +24,10 @@ export interface Field {
   columns?: Column[];
   /** For type "record": which saved list to pick from. */
   collection?: string;
+  /** Short heading to group this field with its neighbours. */
+  section?: string;
+  /** "half" puts short fields side by side. */
+  width?: (typeof WIDTHS)[number];
 }
 export interface Action {
   id: string;
@@ -34,9 +45,12 @@ export interface Action {
   saveTo?: string;
   /** Field id whose value identifies a record; saving the same value again updates it. */
   keyField?: string;
+  /** How to show the result: as an email, as a paper document, or plainly. */
+  show?: (typeof SHOW_STYLES)[number];
 }
-export interface Screen { id: string; title: string; intro?: string; fields: Field[]; actions: Action[] }
-export interface Recipe { version: 1; title: string; summary: string; screens: Screen[] }
+export interface Screen { id: string; title: string; intro?: string; layout?: (typeof LAYOUTS)[number]; fields: Field[]; actions: Action[] }
+export interface Look { color: string; icon: string }
+export interface Recipe { version: 1; title: string; summary: string; look?: Look; screens: Screen[] }
 
 const ID = { type: 'string', pattern: '^[a-z][a-z0-9_]{0,39}$' };
 const str = (max: number, min = 1) => ({ type: 'string', minLength: min, maxLength: max });
@@ -49,6 +63,12 @@ export const RECIPE_SCHEMA = {
     version: { type: 'integer', enum: [1] },
     title: str(80),
     summary: str(400),
+    look: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['color', 'icon'],
+      properties: { color: { type: 'string', enum: COLORS }, icon: { type: 'string', enum: ICON_NAMES } },
+    },
     screens: {
       type: 'array', minItems: 1, maxItems: 5,
       items: {
@@ -59,6 +79,7 @@ export const RECIPE_SCHEMA = {
           id: ID,
           title: str(80),
           intro: str(400, 0),
+          layout: { type: 'string', enum: LAYOUTS },
           fields: {
             type: 'array', maxItems: 30,
             items: {
@@ -83,6 +104,8 @@ export const RECIPE_SCHEMA = {
                   },
                 },
                 collection: ID,
+                section: str(40),
+                width: { type: 'string', enum: WIDTHS },
               },
             },
           },
@@ -103,6 +126,7 @@ export const RECIPE_SCHEMA = {
                 uses: ID,
                 saveTo: ID,
                 keyField: ID,
+                show: { type: 'string', enum: SHOW_STYLES },
               },
             },
           },
@@ -174,6 +198,8 @@ export function validateRecipe(value: unknown): string[] {
     // Every button uses (and checks) every field on its screen, so saving and asking the AI must not share a screen.
     const kinds = new Set(s.actions.map((a) => a.kind ?? 'run'));
     if (kinds.has('save') && kinds.has('run')) errors.push(`screens[${si}] mixes a "save" action with an AI ("run") action; put them on separate screens, each with only the fields it needs`);
+    if (s.layout === 'data' && !kinds.has('list')) errors.push(`screens[${si}] uses the "data" layout, so it needs a "list" action to show the saved records`);
+    if (s.layout === 'steps' && new Set(s.fields.map((f) => f.section).filter(Boolean)).size < 2) errors.push(`screens[${si}] uses the "steps" layout, so its fields need at least two different sections`);
   });
   return errors;
 }

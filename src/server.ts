@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { join, extname, normalize, sep } from 'node:path';
 import { listPlugins, readInstructions } from './reader.ts';
-import { getRecipe, type GeneratorDeps } from './generator.ts';
+import { getRecipe, cachedLook, type GeneratorDeps } from './generator.ts';
 import { getStatus, startInstall, startSignin, sendSigninCode } from './setup.ts';
 import { runAction, type Adapter, type RunResult } from './runner.ts';
 import { PROVIDERS, isProviderId, type ProviderId } from './providers.ts';
@@ -226,7 +226,12 @@ export function createApp(opts: Options = {}) {
 
       if (url.pathname === '/api/info') return json(res, 200, { dataDir: dataDir(opts), provider: PROVIDERS[currentProvider(opts)].label });
 
-      if (url.pathname === '/api/plugins') return json(res, 200, { items: await helpers(opts) });
+      if (url.pathname === '/api/plugins') {
+        const dir = dataDir(opts);
+        // Each helper carries its saved look (if any) so the menu and home page can show its color and icon.
+        const items = await Promise.all((await helpers(opts)).map(async (i) => ({ ...i, look: (await cachedLook(i, dir)) ?? null })));
+        return json(res, 200, { items });
+      }
 
       if (url.pathname === '/api/records') {
         const item = await findHelper(opts, url.searchParams.get('id'));

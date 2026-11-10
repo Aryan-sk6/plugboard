@@ -7,13 +7,29 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header>
-    <h1>Plugboard</h1>
-    <p class="lede">Your AI helpers, ready to use. Everything stays on this computer.</p>
-  </header>
-  <main id="app" aria-live="polite">
-    <p class="status">Looking for your AI helpers…</p>
-  </main>
+  <a class="skip" href="#app">Skip to the main part of the page</a>
+  <div class="shell">
+    <aside class="side" id="side" aria-label="Your helpers">
+      <a class="brand" href="#"><span class="logo" id="logo"></span><span class="brand-name">Plugboard</span></a>
+      <label class="search">
+        <span class="sr-only">Search your helpers</span>
+        <span class="search-icon" id="search-icon"></span>
+        <input id="q" type="search" placeholder="Search helpers" autocomplete="off">
+      </label>
+      <nav class="nav" id="nav" aria-label="Helpers"></nav>
+      <div class="side-foot" id="side-foot"></div>
+    </aside>
+    <div class="scrim" id="scrim" hidden></div>
+    <div class="content">
+      <header class="topbar">
+        <button class="icon-btn" id="menu" type="button" aria-label="Open the helper menu" aria-expanded="false" aria-controls="side"></button>
+        <a class="brand" href="#"><span class="logo" id="logo-top"></span><span class="brand-name">Plugboard</span></a>
+      </header>
+      <main id="app" aria-live="polite">
+        <p class="status">Looking for your AI helpers…</p>
+      </main>
+    </div>
+  </div>
   <script type="module" src="app.js"></script>
 </body>
 </html>
