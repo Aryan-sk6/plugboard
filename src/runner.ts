@@ -1,7 +1,7 @@
 // Runner: packages a helper's instructions + the user's form answers and sends them to the user's own AI program.
 // The AI is only meant to write a reply: Claude runs with no tools at all; Codex has its tools switched off as far as
 // it allows (see codex.ts). Either way the AI is also told not to use tools.
-import { basename, extname } from 'node:path';
+import { extname, win32 } from 'node:path';
 import { askClaude, type AskOptions, type CliResult, type Progress } from './claude.ts';
 import { askCodex } from './codex.ts';
 import type { Action, Field, Screen } from './recipe.ts';
@@ -114,7 +114,8 @@ const FILE_TYPES: Record<string, string> = { '.txt': 'text/plain', '.md': 'text/
 
 /** Safe download name: no folders or odd characters, and only text file types. HTML downloads as plain text so it can't run as a page. */
 export function safeFileName(name: unknown): string {
-  let n = basename(String(name ?? '')).replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '_').trim().slice(0, 100);
+  // win32.basename understands both / and \ as folder marks, on every system
+  let n = win32.basename(String(name ?? '')).replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '_').trim().slice(0, 100);
   if (!n || n.startsWith('.')) n = 'result' + n;
   return FILE_TYPES[extname(n).toLowerCase()] ? n : n + '.txt';
 }

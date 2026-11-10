@@ -45,7 +45,7 @@ export async function launcher(file: string): Promise<Launch | null> {
     const text = await readFile(file, 'utf8').catch(() => '');
     const m = /"%~?dp0%?\\([^"]+?\.(?:js|cjs|mjs|exe))"/i.exec(text);
     if (!m) return null;
-    return launcher(join(dirname(file), m[1]));
+    return launcher(join(dirname(file), m[1].replace(/\\/g, '/'))); // shim paths use backslashes, whatever system reads them
   }
   return { cmd: file, args: [] };
 }
