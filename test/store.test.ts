@@ -36,7 +36,7 @@ test('saving the same key again updates instead of duplicating', () => {
 });
 
 test('records survive closing and reopening the file', async () => {
-  const file = join(await mkdtemp(join(tmpdir(), 'plugboard-db-')), 'data', 'plugboard.db');
+  const file = join(await mkdtemp(join(tmpdir(), 'maginary-db-')), 'data', 'plugboard.db');
   const s1 = new Store(file);
   s1.save('p', 'invoices', { Number: 'INV-1' });
   s1.close();

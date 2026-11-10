@@ -35,8 +35,8 @@ test('listPlugins finds user skills, user commands and enabled plugin items', as
 });
 
 test('listPlugins copes with a missing or broken config folder', async () => {
-  assert.deepEqual(await listPlugins(join(tmpdir(), 'plugboard-nope-' + Date.now())), []);
-  const home = await mkdtemp(join(tmpdir(), 'plugboard-broken-'));
+  assert.deepEqual(await listPlugins(join(tmpdir(), 'maginary-nope-' + Date.now())), []);
+  const home = await mkdtemp(join(tmpdir(), 'maginary-broken-'));
   await mkdir(join(home, 'plugins'));
   await writeFile(join(home, 'plugins', 'installed_plugins.json'), '{ not json');
   await writeFile(join(home, 'settings.json'), 'also not json');

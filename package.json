@@ -1,16 +1,16 @@
 {
-  "name": "plugboard",
+  "name": "maginary",
   "version": "0.1.0",
   "description": "Turn your AI plugins and skills into simple clickable apps. Runs on your own computer with your own AI subscription.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Aryan-sk6/plugboard.git"
+    "url": "git+https://github.com/Aryan-sk6/maginary.git"
   },
-  "homepage": "https://github.com/Aryan-sk6/plugboard#readme",
+  "homepage": "https://github.com/Aryan-sk6/maginary#readme",
   "type": "module",
   "bin": {
-    "plugboard": "dist/cli.js"
+    "maginary": "dist/cli.js"
   },
   "files": [
     "dist",

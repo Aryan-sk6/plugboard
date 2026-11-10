@@ -39,7 +39,7 @@ Return one screen recipe as JSON matching the given schema:
 - Keep screens short: ask only what the tool really needs (aim for 8 fields or fewer per screen).
 - version is always 1.
 
-Remembering things: Plugboard can keep simple lists on the user's computer (for example customers, invoices or stock).
+Remembering things: Maginary can keep simple lists on the user's computer (for example customers, invoices or stock).
 If the tool works with things the user will want to keep and reuse, use these:
 - An action with kind "save" and saveTo "<list name>" stores the screen's answers as one record (no AI involved). Add keyField (a field id such as the name) if saving the same name again should update that record instead of adding a new one.
 - An action with kind "list" and uses "<list name>" shows the saved records (no fields needed).

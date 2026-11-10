@@ -7,7 +7,7 @@ import { askCodex } from './codex.ts';
 import type { Action, Field, Screen } from './recipe.ts';
 import type { PluginItem } from './reader.ts';
 
-/** One AI program Plugboard can run through. */
+/** One AI program Maginary can run through. */
 export interface Adapter {
   id: 'claude' | 'codex';
   label: string;
@@ -53,7 +53,7 @@ const FILE_SCHEMA = {
 const OUTPUT_HINT: Record<Action['output'], string> = {
   text: 'Reply with the finished answer as text.',
   table: 'Return a table: "columns" are short headings, "rows" are lists of cell text in the same order as the columns. Put any short explanation in "note" (or leave it empty).',
-  file: 'Return one file: "fileName" with a sensible extension (.txt, .md, .csv or .html), "content" with the full file text, and a short "note" for the user. Plugboard shows the file with a download button, so the note should not explain how to save it.',
+  file: 'Return one file: "fileName" with a sensible extension (.txt, .md, .csv or .html), "content" with the full file text, and a short "note" for the user. Maginary shows the file with a download button, so the note should not explain how to save it.',
 };
 
 // shortcut: total size cap for what we send; raise if real helpers need more context.
@@ -102,7 +102,7 @@ export function buildRunPrompt(item: PluginItem, instructions: string, screen: S
     `<user_answers>\n${fence(answers)}\n</user_answers>`,
     ...(saved ? [`<saved_records>\n${fence(saved)}\n</saved_records>`] : []),
     OUTPUT_HINT[action.output],
-    ...(action.saveTo ? [`Plugboard will automatically save these answers and your result to the user's "${action.saveTo}" list on their computer, so do not ask them to keep their own record.`] : []),
+    ...(action.saveTo ? [`Maginary will automatically save these answers and your result to the user's "${action.saveTo}" list on their computer, so do not ask them to keep their own record.`] : []),
   ].join('\n\n');
 }
 

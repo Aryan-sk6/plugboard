@@ -1,4 +1,4 @@
-/* Plugboard look. Friendly, light by default, dark when the computer is set to dark.
+/* Maginary look. Friendly, light by default, dark when the computer is set to dark.
    Each helper has its own accent color (data-accent on its card, menu row or page); everything else is neutral. */
 
 :root {

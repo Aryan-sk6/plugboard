@@ -9,7 +9,7 @@ async function put(file: string, text: string) {
 }
 
 export async function makeClaudeHome(): Promise<string> {
-  const home = await mkdtemp(join(tmpdir(), 'plugboard-test-'));
+  const home = await mkdtemp(join(tmpdir(), 'maginary-test-'));
   await put(join(home, 'skills', 'invoice-maker', 'SKILL.md'), '---\nname: invoice-maker\ndescription: Makes invoices for customers.\n---\n\n# Invoice maker\nSteps...\n');
   await put(join(home, 'skills', 'folded', 'SKILL.md'), '---\r\nname: folded\r\ndescription: >\r\n  Line one\r\n  line two.\r\nmetadata:\r\n  version: "1"\r\n---\r\nbody\r\n');
   await put(join(home, 'skills', 'not-a-skill', 'README.md'), 'no SKILL.md here');

@@ -16,7 +16,7 @@ import { resolvePicks, toRecord, recordsTable, recordsForPrompt } from './record
 import { validateValues } from '../public/renderer.js';
 
 const PUBLIC = fileURLToPath(new URL('../public/', import.meta.url));
-/** Where data lived before it moved to Documents/Plugboard (copied over once by the CLI). */
+/** Where data lived before it moved to Documents/Maginary (copied over once by the CLI). */
 export const OLD_DATA = fileURLToPath(new URL('../data/', import.meta.url));
 const EXAMPLES = fileURLToPath(new URL('../examples/', import.meta.url));
 const TYPES: Record<string, string> = {
@@ -30,13 +30,13 @@ const TYPES: Record<string, string> = {
 export interface Options {
   /** Claude config folder to read. Defaults to the user's real one. */
   claudeHome?: string;
-  /** Plugboard's own data folder (recipe cache, later the database). */
+  /** Maginary's own data folder (recipe cache, later the database). */
   dataDir?: string;
   /** Replaces the AI call; tests only. */
   ask?: GeneratorDeps['ask'];
   /** Replaces the AI program used for runs; tests only. */
   adapter?: Adapter;
-  /** Folder of sample plugins; defaults to Plugboard's own examples. "" turns them off. */
+  /** Folder of sample plugins; defaults to Maginary's own examples. "" turns them off. */
   examplesDir?: string;
 }
 
@@ -55,7 +55,7 @@ function hostOk(req: IncomingMessage): boolean {
   return host === '127.0.0.1' || host === 'localhost' || host === '[::1]';
 }
 
-// Actions must come from Plugboard's own page: JSON body (other sites' plain forms can't send it) and a matching Origin.
+// Actions must come from Maginary's own page: JSON body (other sites' plain forms can't send it) and a matching Origin.
 function sameSite(req: IncomingMessage): boolean {
   if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) return false;
   const origin = req.headers.origin;
@@ -116,7 +116,7 @@ async function statusFor(opts: Options, requested: unknown) {
   };
 }
 
-/** The user's helpers plus Plugboard's examples ("" turns examples off, for tests). */
+/** The user's helpers plus Maginary's examples ("" turns examples off, for tests). */
 function helpers(opts: Options) {
   return listPlugins(opts.claudeHome, opts.examplesDir === '' ? undefined : (opts.examplesDir ?? EXAMPLES));
 }
@@ -257,7 +257,7 @@ export function createApp(opts: Options = {}) {
       }
     } catch (err) {
       console.error(err); // details stay in the terminal; the browser gets a plain message
-      json(res, 500, { error: 'Something went wrong on this computer. Try again, or restart Plugboard.' });
+      json(res, 500, { error: 'Something went wrong on this computer. Try again, or restart Maginary.' });
     }
   });
 }

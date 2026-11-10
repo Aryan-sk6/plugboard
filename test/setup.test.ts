@@ -19,8 +19,8 @@ const until = async (fn: () => Promise<boolean>, ms = 5000) => {
 
 beforeEach(async () => {
   resetSetupForTests();
-  process.env.PLUGBOARD_CLAUDE_PATH = FAKE;
-  process.env.FAKE_STATE = join(await mkdtemp(join(tmpdir(), 'plugboard-auth-')), 'state');
+  process.env.MAGINARY_CLAUDE_PATH = FAKE;
+  process.env.FAKE_STATE = join(await mkdtemp(join(tmpdir(), 'maginary-auth-')), 'state');
   delete process.env.FAKE_LOGIN;
 });
 
@@ -31,9 +31,9 @@ test('uses the official install command for each system', () => {
 });
 
 test('reports not installed, then installed but signed out, then signed in', async () => {
-  process.env.PLUGBOARD_CLAUDE_PATH = join(tmpdir(), 'no-claude-here.exe');
+  process.env.MAGINARY_CLAUDE_PATH = join(tmpdir(), 'no-claude-here.exe');
   assert.deepEqual(await getStatus(), { installed: false, signedIn: false, install: { state: 'idle' }, signin: { state: 'idle' } });
-  process.env.PLUGBOARD_CLAUDE_PATH = FAKE;
+  process.env.MAGINARY_CLAUDE_PATH = FAKE;
   assert.equal((await getStatus()).signedIn, false);
   await writeFile(process.env.FAKE_STATE!, '1');
   assert.equal((await getStatus()).signedIn, true);
@@ -78,17 +78,17 @@ test('installer success and failure', async () => {
 const FAKE_CODEX = fileURLToPath(new URL('./fake-codex.mjs', import.meta.url));
 
 test('ChatGPT: reports not installed, then installed but signed out, then signed in', async () => {
-  process.env.PLUGBOARD_CODEX_PATH = join(tmpdir(), 'no-codex-here.exe');
+  process.env.MAGINARY_CODEX_PATH = join(tmpdir(), 'no-codex-here.exe');
   const none = await getStatus('codex');
   assert.deepEqual([none.installed, none.signedIn], [false, false]);
-  process.env.PLUGBOARD_CODEX_PATH = FAKE_CODEX;
+  process.env.MAGINARY_CODEX_PATH = FAKE_CODEX;
   assert.deepEqual([(await getStatus('codex')).installed, (await getStatus('codex')).signedIn], [true, false]);
   await writeFile(process.env.FAKE_STATE!, '1');
   assert.equal((await getStatus('codex')).signedIn, true);
 });
 
 test('ChatGPT: sign-in shows OpenAI\'s link and finishes, without touching Claude\'s state', async () => {
-  process.env.PLUGBOARD_CODEX_PATH = FAKE_CODEX;
+  process.env.MAGINARY_CODEX_PATH = FAKE_CODEX;
   await startSignin('codex');
   await until(async () => (await getStatus('codex')).signin.url === 'https://auth.openai.com/oauth/authorize?x=1');
   assert.equal((await getStatus('claude')).signin.state, 'idle', 'Claude is unaffected');

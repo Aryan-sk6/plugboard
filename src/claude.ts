@@ -50,9 +50,9 @@ export async function launcher(file: string): Promise<Launch | null> {
   return { cmd: file, args: [] };
 }
 
-/** Finds the claude program: PLUGBOARD_CLAUDE_PATH, then PATH, then the native installer's folder. */
+/** Finds the claude program: MAGINARY_CLAUDE_PATH, then PATH, then the native installer's folder. */
 export async function findClaude(): Promise<Launch | null> {
-  if (process.env.PLUGBOARD_CLAUDE_PATH) return launcher(process.env.PLUGBOARD_CLAUDE_PATH);
+  if (process.env.MAGINARY_CLAUDE_PATH) return launcher(process.env.MAGINARY_CLAUDE_PATH);
   const names = process.platform === 'win32' ? ['claude.exe', 'claude.cmd'] : ['claude'];
   const dirs = [...(process.env.PATH ?? '').split(delimiter).filter(Boolean), join(homedir(), '.local', 'bin')];
   for (const dir of dirs) {
@@ -152,7 +152,7 @@ export async function askClaude(opts: AskOptions): Promise<CliResult> {
       opts.signal?.removeEventListener('abort', onAbort);
       resolve(r);
     };
-    child.on('error', (err: NodeJS.ErrnoException) => finish({ ok: false, message: err.code === 'ENOENT' ? NOT_FOUND : `Plugboard couldn't start Claude: ${err.message}` }));
+    child.on('error', (err: NodeJS.ErrnoException) => finish({ ok: false, message: err.code === 'ENOENT' ? NOT_FOUND : `Maginary couldn't start Claude: ${err.message}` }));
     child.on('close', (code) => {
       if (why === 'stopped') return finish({ ok: false, message: STOPPED });
       if (why === 'timeout') return finish({ ok: false, message: `Claude took too long to answer (over ${Math.round(timeoutMs / 60_000)} minutes). Please try again.` });

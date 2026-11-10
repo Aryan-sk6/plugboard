@@ -31,7 +31,7 @@ export const ICONS = {
 export const ICON_NAMES = Object.keys(ICONS);
 
 /** Used by the app frame only (not offered to the AI). */
-const EXTRA = { plug: [p('M9 2v6M15 2v6M7 8h10v4a5 5 0 0 1-10 0V8z'), p('M12 17v5')], search: [c(11, 11, 7), p('M21 21l-4.3-4.3')], menu: [p('M4 6h16M4 12h16M4 18h16')], arrow: [p('M5 12h14M13 6l6 6-6 6')] };
+const EXTRA = { search: [c(11, 11, 7), p('M21 21l-4.3-4.3')], menu: [p('M4 6h16M4 12h16M4 18h16')], arrow: [p('M5 12h14M13 6l6 6-6 6')] };
 
 /** Builds an SVG icon element shape by shape (no innerHTML). Unknown names get the sparkles icon. */
 export function iconEl(name, size = 20) {

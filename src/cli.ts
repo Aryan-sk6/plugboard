@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// Starts Plugboard and opens it in the browser.
+// Starts Maginary and opens it in the browser.
 import { spawn } from 'node:child_process';
 import type { AddressInfo } from 'node:net';
 import { createApp, OLD_DATA } from './server.ts';
-import { defaultDataDir, copyOldData } from './paths.ts';
+import { defaultDataDir, legacyDataDir, copyOldData } from './paths.ts';
 
 const args = process.argv.slice(2);
 const portArg = args.indexOf('--port');
@@ -22,6 +22,8 @@ function openBrowser(url: string) {
 
 const dataDir = defaultDataDir();
 try {
+  // Records from when the app was called Plugboard come first, then anything from the app's own folder. Old copies are left alone.
+  if (!process.env.MAGINARY_DATA && copyOldData(legacyDataDir(), dataDir)) console.log(`Moved your saved records from the old Plugboard folder to ${dataDir} (the old copy was left where it was).`);
   if (copyOldData(OLD_DATA, dataDir)) console.log(`Moved your saved records to ${dataDir} (the old copy was left where it was).`);
 } catch (err) {
   console.error(`Could not copy your old saved records to ${dataDir}: ${(err as Error).message}`);
@@ -33,12 +35,12 @@ function listen(port: number) {
 }
 server.on('error', (err: NodeJS.ErrnoException) => {
   if (err.code === 'EADDRINUSE' && portArg < 0) return listen(0); // default port busy: take any free one
-  console.error(err.code === 'EADDRINUSE' ? `Port ${wanted} is already in use. Try a different number with --port.` : `Plugboard could not start: ${err.message}`);
+  console.error(err.code === 'EADDRINUSE' ? `Port ${wanted} is already in use. Try a different number with --port.` : `Maginary could not start: ${err.message}`);
   process.exit(1);
 });
 server.on('listening', () => {
   const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  console.log(`\nPlugboard is running.\nOpen this link in your browser if it did not open by itself: ${url}\nYour saved records are kept in: ${dataDir}\nTo stop Plugboard, close this window or press Ctrl+C.\n`);
+  console.log(`\nMaginary is running.\nOpen this link in your browser if it did not open by itself: ${url}\nYour saved records are kept in: ${dataDir}\nTo stop Maginary, close this window or press Ctrl+C.\n`);
   if (!noOpen) openBrowser(url);
 });
 listen(wanted);

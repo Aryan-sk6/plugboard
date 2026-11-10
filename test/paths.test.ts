@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
-import { join, isAbsolute } from 'node:path';
-import { documentsDir, defaultDataDir, copyOldData } from '../src/paths.ts';
+import { join, isAbsolute, dirname } from 'node:path';
+import { documentsDir, defaultDataDir, legacyDataDir, copyOldData } from '../src/paths.ts';
 
 test('finds a real Documents folder on this system', () => {
   const d = documentsDir();
@@ -12,17 +12,17 @@ test('finds a real Documents folder on this system', () => {
   assert.notEqual(d, '', 'never empty');
 });
 
-test('data lives in Documents/Plugboard, unless PLUGBOARD_DATA says otherwise', () => {
-  const old = process.env.PLUGBOARD_DATA;
+test('data lives in Documents/Maginary, unless MAGINARY_DATA says otherwise', () => {
+  const old = process.env.MAGINARY_DATA;
   try {
-    process.env.PLUGBOARD_DATA = join(tmpdir(), 'pb-custom');
+    process.env.MAGINARY_DATA = join(tmpdir(), 'pb-custom');
     assert.equal(defaultDataDir(), join(tmpdir(), 'pb-custom'));
-    delete process.env.PLUGBOARD_DATA;
+    delete process.env.MAGINARY_DATA;
     const d = defaultDataDir();
-    assert.ok(d.endsWith(join('', 'Plugboard')) && d.startsWith(homedir()), d);
+    assert.ok(d.endsWith(join('', 'Maginary')) && d.startsWith(homedir()), d);
   } finally {
-    if (old === undefined) delete process.env.PLUGBOARD_DATA;
-    else process.env.PLUGBOARD_DATA = old;
+    if (old === undefined) delete process.env.MAGINARY_DATA;
+    else process.env.MAGINARY_DATA = old;
   }
 });
 
@@ -41,4 +41,16 @@ test('old data is copied once and never overwrites newer data', async () => {
   await writeFile(join(newDir, 'plugboard.db'), 'NEW');
   assert.equal(copyOldData(oldDir, newDir), false, 'new folder already has data');
   assert.equal(await readFile(join(newDir, 'plugboard.db'), 'utf8'), 'NEW');
+});
+
+test('records from when the app was called Plugboard are found next to the new folder', () => {
+  const old = process.env.MAGINARY_DATA;
+  try {
+    delete process.env.MAGINARY_DATA;
+    assert.ok(legacyDataDir().endsWith('Plugboard'));
+    assert.equal(dirname(legacyDataDir()), dirname(defaultDataDir()), 'same Documents folder');
+    assert.ok(defaultDataDir().endsWith('Maginary'));
+  } finally {
+    if (old !== undefined) process.env.MAGINARY_DATA = old;
+  }
 });

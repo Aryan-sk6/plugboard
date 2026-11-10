@@ -30,7 +30,7 @@ test('prompt has instructions, answers and the button, and only known fields', (
   assert.match(RUN_SYSTEM_PROMPT, /Do not use any tools/);
 });
 
-test('the AI is told when Plugboard saves the result for it', () => {
+test('the AI is told when Maginary saves the result for it', () => {
   assert.match(buildRunPrompt(item, 'x', screen, { ...action, saveTo: 'invoices' }, {}), /automatically save these answers and your result to the user's "invoices" list/);
   assert.ok(!/automatically save/.test(buildRunPrompt(item, 'x', screen, action, {})));
 });

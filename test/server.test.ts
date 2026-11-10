@@ -14,7 +14,7 @@ import { makeClaudeHome, goodRecipe, storeScreens } from './fixture.ts';
 const server = createApp({
   claudeHome: await makeClaudeHome(),
   examplesDir: '',
-  dataDir: await mkdtemp(join(tmpdir(), 'plugboard-data-')),
+  dataDir: await mkdtemp(join(tmpdir(), 'maginary-data-')),
   ask: async () => ({ ok: true, text: '', structured: { ...goodRecipe(), screens: [...goodRecipe().screens, ...storeScreens()] } }),
   adapter: {
     id: 'claude',
@@ -54,7 +54,7 @@ test('serves the plugin list as JSON', async () => {
 test('serves the list screen', async () => {
   const r = await get('/');
   assert.equal(r.status, 200);
-  assert.match(r.body, /<title>Plugboard<\/title>/);
+  assert.match(r.body, /<title>Maginary<\/title>/);
   assert.equal((await get('/app.js')).status, 200);
   assert.match((await get('/dev/')).body, /Component test page/);
 });
@@ -70,7 +70,7 @@ test('does not serve files outside the public folder', async () => {
   assert.equal((await get('/%2e%2e%2fsrc%2fserver.ts')).status, 404);
 });
 
-test('actions only accept JSON from Plugboard itself', async () => {
+test('actions only accept JSON from Maginary itself', async () => {
   const host = `127.0.0.1:${port}`;
   assert.equal((await get('/api/setup/install', host, 'POST')).status, 403, 'plain form post from another site');
   assert.equal((await get('/api/setup/install', host, 'POST', { 'content-type': 'text/plain' })).status, 403);
@@ -179,13 +179,13 @@ test('the Connect screen can switch between Claude and ChatGPT, and the choice i
 });
 
 test('with ChatGPT chosen, screens are designed and buttons run through Codex, never Claude', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'plugboard-codex-app-'));
+  const dir = await mkdtemp(join(tmpdir(), 'maginary-codex-app-'));
   writeProvider(dir, 'codex');
   const reply = JSON.stringify({ ...goodRecipe(), screens: [...goodRecipe().screens, ...storeScreens()] });
   const old = { ...process.env };
   Object.assign(process.env, {
-    PLUGBOARD_CODEX_PATH: fileURLToPath(new URL('./fake-codex.mjs', import.meta.url)),
-    PLUGBOARD_CLAUDE_PATH: join(tmpdir(), 'claude-must-not-be-used.exe'),
+    MAGINARY_CODEX_PATH: fileURLToPath(new URL('./fake-codex.mjs', import.meta.url)),
+    MAGINARY_CLAUDE_PATH: join(tmpdir(), 'claude-must-not-be-used.exe'),
     FAKE_MODE: 'reply',
     FAKE_CODEX_REPLY: reply,
   });
@@ -208,6 +208,6 @@ test('with ChatGPT chosen, screens are designed and buttons run through Codex, n
     assert.ok(last.text.startsWith('{'), 'the answer came from the fake Codex');
   } finally {
     app.close();
-    for (const k of ['PLUGBOARD_CODEX_PATH', 'PLUGBOARD_CLAUDE_PATH', 'FAKE_MODE', 'FAKE_CODEX_REPLY']) old[k] === undefined ? delete process.env[k] : (process.env[k] = old[k]);
+    for (const k of ['MAGINARY_CODEX_PATH', 'MAGINARY_CLAUDE_PATH', 'FAKE_MODE', 'FAKE_CODEX_REPLY']) old[k] === undefined ? delete process.env[k] : (process.env[k] = old[k]);
   }
 });

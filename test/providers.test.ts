@@ -37,7 +37,7 @@ test('only sign-in links on each provider\'s own sites are ever shown', () => {
   }
 });
 
-test('only Claude has an installer Plugboard can run; ChatGPT gets instructions instead', () => {
+test('only Claude has an installer Maginary can run; ChatGPT gets instructions instead', () => {
   assert.ok(PROVIDERS.claude.installCommand);
   assert.equal(PROVIDERS.codex.installCommand, undefined);
   assert.match(PROVIDERS.codex.installHelp.url, /^https:\/\/developers\.openai\.com\//);

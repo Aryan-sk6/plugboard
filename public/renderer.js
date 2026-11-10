@@ -49,7 +49,7 @@ export function cleanRows(rows) {
 
 /** Can this file be read as text for the AI? Returns a problem message or null. */
 export function fileProblem(name, size) {
-  if (!TEXT_FILE.test(name)) return 'For now Plugboard can read text files only, like .txt, .csv or .md.';
+  if (!TEXT_FILE.test(name)) return 'For now Maginary can read text files only, like .txt, .csv or .md.';
   if (size > MAX_FILE_BYTES) return `This file is too big. Please use a file under ${Math.round(MAX_FILE_BYTES / 1000)} KB.`;
   return null;
 }
@@ -401,7 +401,7 @@ function buildTable(f, id) {
 }
 
 /**
- * Only AI actions can need an "are you sure" box. Saving to, or listing, Plugboard's own lists never
+ * Only AI actions can need an "are you sure" box. Saving to, or listing, Maginary's own lists never
  * writes files or sends messages, whatever the (AI-written) flags on the recipe say.
  */
 export function needsConfirm(action) {
@@ -429,7 +429,7 @@ export function confirmAction(action, title = 'Before this runs', yesLabel = 'Ye
     const dialog = el('dialog', 'confirm');
     dialog.append(el('h3', null, title), el('p', null, action.does));
     const list = el('ul');
-    if (action.writesFiles) list.append(el('li', null, 'This makes a file for you to download. Plugboard does not change any files on your computer.'));
+    if (action.writesFiles) list.append(el('li', null, 'This makes a file for you to download. Maginary does not change any files on your computer.'));
     if (action.sendsMessages) list.append(el('li', null, 'This will send messages or emails on your behalf.'));
     const row = el('div', 'action');
     const yes = el('button', null, yesLabel);

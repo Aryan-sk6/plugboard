@@ -13,7 +13,7 @@ async function setup() {
   const home = await makeClaudeHome();
   const items = await listPlugins(home);
   const item = items.find((i) => i.name === 'invoice-maker') as PluginItem;
-  const dataDir = await mkdtemp(join(tmpdir(), 'plugboard-data-'));
+  const dataDir = await mkdtemp(join(tmpdir(), 'maginary-data-'));
   return { item, dataDir };
 }
 

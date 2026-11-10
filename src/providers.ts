@@ -1,4 +1,4 @@
-// The AI programs Plugboard can use: how to find them, check sign-in, sign in, install, and ask them things.
+// The AI programs Maginary can use: how to find them, check sign-in, sign in, install, and ask them things.
 import { findClaude, type Launch } from './claude.ts';
 import { findCodex } from './codex.ts';
 import { claudeAdapter, codexAdapter, type Adapter } from './runner.ts';
@@ -62,10 +62,10 @@ export const PROVIDERS: Record<ProviderId, Provider> = {
     isSignedIn: (code, output) => code === 0 && !/not logged in/i.test(output),
     loginArgs: ['login'],
     loginSites: /^https:\/\/([a-z0-9-]+\.)*(openai\.com|chatgpt\.com)\//i,
-    installHelp: { text: "Plugboard can't install ChatGPT's Codex for you. Install the Codex app or program from OpenAI, then come back here. This page notices by itself.", url: 'https://developers.openai.com/codex' },
+    installHelp: { text: "Maginary can't install ChatGPT's Codex for you. Install the Codex app or program from OpenAI, then come back here. This page notices by itself.", url: 'https://developers.openai.com/codex' },
     adapter: codexAdapter,
     notice:
-      "ChatGPT mode: Plugboard asks Codex to answer in read-only mode with its extra tools switched off as far as possible. " +
+      "ChatGPT mode: Maginary asks Codex to answer in read-only mode with its extra tools switched off as far as possible. " +
       "Codex can't be made completely text-only the way Claude can, so only use helpers you trust. Answers appear all at once when they are ready.",
   },
 };

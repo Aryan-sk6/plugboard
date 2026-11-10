@@ -115,7 +115,7 @@ export async function startSignin(id: ProviderId = 'claude'): Promise<void> {
   child.stderr?.on('data', read);
   child.stdin?.on('error', () => {});
   child.on('error', () => {
-    j.signin = { state: 'failed', message: `Plugboard couldn't start the ${p.label} sign-in. Please try again.` };
+    j.signin = { state: 'failed', message: `Maginary couldn't start the ${p.label} sign-in. Please try again.` };
   });
   child.on('close', (code) => {
     clearTimeout(timer);

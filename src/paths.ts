@@ -1,4 +1,4 @@
-// Where Plugboard keeps the user's saved records and screen designs: Documents/Plugboard,
+// Where Maginary keeps the user's saved records and screen designs: Documents/Maginary,
 // so they survive updates and are easy to find and back up.
 import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync } from 'node:fs';
@@ -29,10 +29,15 @@ export function documentsDir(platform = process.platform): string {
 
 let cached: string | null = null;
 
-/** Plugboard's data folder: PLUGBOARD_DATA if set, otherwise Documents/Plugboard. */
+/** Maginary's data folder: MAGINARY_DATA if set, otherwise Documents/Maginary. */
 export function defaultDataDir(): string {
-  if (process.env.PLUGBOARD_DATA) return resolve(process.env.PLUGBOARD_DATA);
-  return (cached ??= join(documentsDir(), 'Plugboard'));
+  if (process.env.MAGINARY_DATA) return resolve(process.env.MAGINARY_DATA);
+  return (cached ??= join(documentsDir(), 'Maginary'));
+}
+
+/** Before it was called Maginary, the app was called Plugboard and kept records in Documents/Plugboard. */
+export function legacyDataDir(): string {
+  return join(documentsDir(), 'Plugboard');
 }
 
 /**

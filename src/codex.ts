@@ -23,9 +23,9 @@ export const DISABLED_FEATURES = [
   'tool_suggest', 'goals', 'memories',
 ];
 
-/** Finds the codex program: PLUGBOARD_CODEX_PATH, then PATH, then the Windows desktop app's folder. */
+/** Finds the codex program: MAGINARY_CODEX_PATH, then PATH, then the Windows desktop app's folder. */
 export async function findCodex(): Promise<Launch | null> {
-  if (process.env.PLUGBOARD_CODEX_PATH) return launcher(process.env.PLUGBOARD_CODEX_PATH);
+  if (process.env.MAGINARY_CODEX_PATH) return launcher(process.env.MAGINARY_CODEX_PATH);
   const names = process.platform === 'win32' ? ['codex.exe', 'codex.cmd'] : ['codex'];
   const dirs = [...(process.env.PATH ?? '').split(delimiter).filter(Boolean), join(homedir(), '.local', 'bin')];
   for (const dir of dirs) {
@@ -108,7 +108,7 @@ export async function askCodex(opts: AskOptions): Promise<CliResult> {
   const timeoutMs = opts.timeoutMs ?? 5 * 60_000;
 
   // A private folder per run. The AI works in an empty "work" folder inside it; the schema file sits beside it.
-  const dir = await mkdtemp(join(tmpdir(), 'plugboard-codex-'));
+  const dir = await mkdtemp(join(tmpdir(), 'maginary-codex-'));
   const work = join(dir, 'work');
   await mkdir(work);
   let schemaFile: string | undefined;
@@ -159,7 +159,7 @@ export async function askCodex(opts: AskOptions): Promise<CliResult> {
         opts.signal?.removeEventListener('abort', onAbort);
         resolve(r);
       };
-      child.on('error', (err: NodeJS.ErrnoException) => finish({ ok: false, message: err.code === 'ENOENT' ? CODEX_NOT_FOUND : `Plugboard couldn't start ChatGPT: ${err.message}` }));
+      child.on('error', (err: NodeJS.ErrnoException) => finish({ ok: false, message: err.code === 'ENOENT' ? CODEX_NOT_FOUND : `Maginary couldn't start ChatGPT: ${err.message}` }));
       child.on('close', (code) => {
         if (why === 'stopped') return finish({ ok: false, message: STOPPED });
         if (why === 'timeout') return finish({ ok: false, message: `ChatGPT took too long to answer (over ${Math.round(timeoutMs / 60_000)} minutes). Please try again.` });

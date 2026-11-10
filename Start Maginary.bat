@@ -1,5 +1,5 @@
 @echo off
-title Plugboard
+title Maginary
 cd /d "%~dp0"
 where node >nul 2>nul
 if errorlevel 1 goto nonode
@@ -11,23 +11,23 @@ exit /b 0
 
 :nonode
 echo.
-echo Plugboard needs a free program called Node.js, and it is not installed yet.
+echo Maginary needs a free program called Node.js, and it is not installed yet.
 echo   1. Open https://nodejs.org in your web browser.
 echo   2. Click the big green download button and run the installer.
-echo   3. Double-click "Start Plugboard" again.
+echo   3. Double-click "Start Maginary" again.
 goto end
 
 :oldnode
 echo.
-echo Your copy of Node.js is too old for Plugboard.
+echo Your copy of Node.js is too old for Maginary.
 echo   1. Open https://nodejs.org in your web browser.
 echo   2. Click the big green download button and run the installer.
-echo   3. Double-click "Start Plugboard" again.
+echo   3. Double-click "Start Maginary" again.
 goto end
 
 :crashed
 echo.
-echo Plugboard stopped. If you did not close it on purpose, see "Troubleshooting" in README.md.
+echo Maginary stopped. If you did not close it on purpose, see "Troubleshooting" in README.md.
 
 :end
 echo.

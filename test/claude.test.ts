@@ -23,7 +23,7 @@ async function withEnv<T>(env: Record<string, string | undefined>, fn: () => Pro
 const opts = { system: 'SYS "quoted" text', prompt: 'hello ' + 'x'.repeat(50_000), schema: { type: 'object', properties: { a: { type: 'string' } } } };
 
 test('passes safe flags as separate args and the prompt via stdin, even when long', async () => {
-  const r = await withEnv({ PLUGBOARD_CLAUDE_PATH: FAKE, FAKE_MODE: 'echo' }, () => askClaude(opts));
+  const r = await withEnv({ MAGINARY_CLAUDE_PATH: FAKE, FAKE_MODE: 'echo' }, () => askClaude(opts));
   assert.ok(r.ok);
   const { args, stdin } = JSON.parse(r.text);
   assert.equal(stdin, opts.prompt);
@@ -36,12 +36,12 @@ test('passes safe flags as separate args and the prompt via stdin, even when lon
 });
 
 test('returns structured output', async () => {
-  const r = await withEnv({ PLUGBOARD_CLAUDE_PATH: FAKE, FAKE_MODE: 'structured' }, () => askClaude(opts));
+  const r = await withEnv({ MAGINARY_CLAUDE_PATH: FAKE, FAKE_MODE: 'structured' }, () => askClaude(opts));
   assert.deepEqual(r, { ok: true, text: '', structured: { ok: true } });
 });
 
 test('turns CLI failures into plain messages', async () => {
-  const run = (mode: string, timeoutMs?: number) => withEnv({ PLUGBOARD_CLAUDE_PATH: FAKE, FAKE_MODE: mode }, () => askClaude({ ...opts, timeoutMs }));
+  const run = (mode: string, timeoutMs?: number) => withEnv({ MAGINARY_CLAUDE_PATH: FAKE, FAKE_MODE: mode }, () => askClaude({ ...opts, timeoutMs }));
   assert.deepEqual(await run('notlogged'), { ok: false, message: NOT_SIGNED_IN });
   const limit = await run('limit');
   assert.ok(!limit.ok && limit.message.includes('usage limit'), 'provider limit message is shown as-is');
@@ -52,22 +52,22 @@ test('turns CLI failures into plain messages', async () => {
 });
 
 test('reports a missing CLI plainly', async () => {
-  const r = await withEnv({ PLUGBOARD_CLAUDE_PATH: join(tmpdir(), 'no-such-claude.exe') }, () => askClaude(opts));
+  const r = await withEnv({ MAGINARY_CLAUDE_PATH: join(tmpdir(), 'no-such-claude.exe') }, () => askClaude(opts));
   assert.deepEqual(r, { ok: false, message: NOT_FOUND });
 });
 
 test('resolves a Windows npm .cmd shim to its real target', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'plugboard-shim-'));
+  const dir = await mkdtemp(join(tmpdir(), 'maginary-shim-'));
   await mkdir(join(dir, 'node_modules', 'pkg'), { recursive: true });
   await writeFile(join(dir, 'node_modules', 'pkg', 'cli.js'), '');
   await writeFile(join(dir, 'claude.cmd'), '@ECHO off\r\nendLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\node_modules\\pkg\\cli.js" %*\r\n');
-  const found = await withEnv({ PLUGBOARD_CLAUDE_PATH: join(dir, 'claude.cmd') }, () => findClaude());
+  const found = await withEnv({ MAGINARY_CLAUDE_PATH: join(dir, 'claude.cmd') }, () => findClaude());
   assert.deepEqual(found, { cmd: process.execPath, args: [join(dir, 'node_modules', 'pkg', 'cli.js')] });
 });
 
 test('streaming mode reports live text and progress, then the final result', async () => {
   const seen: Progress[] = [];
-  const r = await withEnv({ PLUGBOARD_CLAUDE_PATH: FAKE, FAKE_MODE: 'stream' }, () => askClaude({ ...opts, onProgress: (p) => seen.push(p) }));
+  const r = await withEnv({ MAGINARY_CLAUDE_PATH: FAKE, FAKE_MODE: 'stream' }, () => askClaude({ ...opts, onProgress: (p) => seen.push(p) }));
   assert.deepEqual(r, { ok: true, text: 'Hello there', structured: undefined });
   assert.deepEqual(seen, [{ type: 'text', text: 'Hello ' }, { type: 'text', text: 'there' }, { type: 'working', chars: 5 }]);
 });
@@ -80,6 +80,6 @@ test('streaming uses stream-json with --verbose and partial messages', () => {
 
 test('Stop kills the CLI and says so plainly', async () => {
   const stop = new AbortController();
-  const r = await withEnv({ PLUGBOARD_CLAUDE_PATH: FAKE, FAKE_MODE: 'streamhang' }, () => askClaude({ ...opts, signal: stop.signal, onProgress: () => stop.abort() }));
+  const r = await withEnv({ MAGINARY_CLAUDE_PATH: FAKE, FAKE_MODE: 'streamhang' }, () => askClaude({ ...opts, signal: stop.signal, onProgress: () => stop.abort() }));
   assert.deepEqual(r, { ok: false, message: STOPPED });
 });

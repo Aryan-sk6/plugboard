@@ -1,4 +1,4 @@
-// Plugboard's small settings file (which AI to use), kept in the user's data folder.
+// Maginary's small settings file (which AI to use), kept in the user's data folder.
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { isProviderId, type ProviderId } from './providers.ts';

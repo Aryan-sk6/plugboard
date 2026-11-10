@@ -128,7 +128,7 @@ export async function readInstructions(item: PluginItem): Promise<string> {
   return (await readFile(item.file, 'utf8')).replace(/\r\n?/g, '\n');
 }
 
-/** Sample plugins shipped with Plugboard: each subfolder of examplesDir is one plugin. */
+/** Sample plugins shipped with Maginary: each subfolder of examplesDir is one plugin. */
 async function scanExamples(examplesDir: string): Promise<PluginItem[]> {
   const results = await Promise.all(
     (await subdirs(examplesDir)).map(async (d) => {
@@ -139,7 +139,7 @@ async function scanExamples(examplesDir: string): Promise<PluginItem[]> {
   return results.flat();
 }
 
-/** Every skill and command Claude Code would load for this user, plus Plugboard's examples if a folder is given. */
+/** Every skill and command Claude Code would load for this user, plus Maginary's examples if a folder is given. */
 export async function listPlugins(home = claudeHome(), examplesDir?: string): Promise<PluginItem[]> {
   const [own, plugins, examples] = await Promise.all([
     scanFolder(home, 'Your skills', 'Your commands', 'user'),

@@ -22,7 +22,7 @@ async function withEnv<T>(env: Record<string, string | undefined>, fn: () => Pro
   }
 }
 const run = (mode: string, extra: Record<string, string> = {}, opts: Parameters<typeof askCodex>[0] = { system: 'SYS', prompt: 'hello' }) =>
-  withEnv({ PLUGBOARD_CODEX_PATH: FAKE, FAKE_MODE: mode, ...extra }, () => askCodex(opts));
+  withEnv({ MAGINARY_CODEX_PATH: FAKE, FAKE_MODE: mode, ...extra }, () => askCodex(opts));
 
 test('every run is read-only, never asks for approval, ignores personal settings and switches risky features off', () => {
   const args = codexArgs();
@@ -98,7 +98,7 @@ test('not-JSON answers to a structured request still come back as text for the c
 
 test('progress is reported when a message arrives', async () => {
   const seen: Progress[] = [];
-  await withEnv({ PLUGBOARD_CODEX_PATH: FAKE, FAKE_MODE: 'reply', FAKE_CODEX_REPLY: 'abc' }, () => askCodex({ system: 's', prompt: 'p', onProgress: (p) => seen.push(p) }));
+  await withEnv({ MAGINARY_CODEX_PATH: FAKE, FAKE_MODE: 'reply', FAKE_CODEX_REPLY: 'abc' }, () => askCodex({ system: 's', prompt: 'p', onProgress: (p) => seen.push(p) }));
   assert.deepEqual(seen, [{ type: 'working', chars: 3 }]);
 });
 
@@ -123,7 +123,7 @@ test('timeout and Stop kill the program and say so plainly', async () => {
 });
 
 test('a missing program is reported plainly', async () => {
-  const r = await withEnv({ PLUGBOARD_CODEX_PATH: join(tmpdir(), 'no-such-codex.exe') }, () => askCodex({ system: 's', prompt: 'p' }));
+  const r = await withEnv({ MAGINARY_CODEX_PATH: join(tmpdir(), 'no-such-codex.exe') }, () => askCodex({ system: 's', prompt: 'p' }));
   assert.deepEqual(r, { ok: false, message: CODEX_NOT_FOUND });
-  assert.equal(await withEnv({ PLUGBOARD_CODEX_PATH: FAKE }, () => findCodex()).then((f) => f?.args.at(-1)), FAKE);
+  assert.equal(await withEnv({ MAGINARY_CODEX_PATH: FAKE }, () => findCodex()).then((f) => f?.args.at(-1)), FAKE);
 });

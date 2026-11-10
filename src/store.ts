@@ -1,4 +1,4 @@
-// Local Data Store: one SQLite file in Plugboard's data folder. Every record belongs to one helper (its namespace),
+// Local Data Store: one SQLite file in Maginary's data folder. Every record belongs to one helper (its namespace),
 // and every query is scoped to that helper, so one helper can never see another helper's records.
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';

@@ -1,7 +1,7 @@
 import { renderRecipe, renderResult, showOf } from './renderer.js';
 import { iconEl, lookFor } from './look.js';
 
-// Plugboard screens. Plugin text and AI recipes are untrusted: only ever set with textContent, never as HTML.
+// Maginary screens. Plugin text and AI recipes are untrusted: only ever set with textContent, never as HTML.
 const app = document.getElementById('app');
 const nav = document.getElementById('nav');
 const searchBox = document.getElementById('q');
@@ -33,7 +33,7 @@ async function getJson(url, body) {
   try {
     res = await fetch(url, body === undefined ? undefined : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   } catch {
-    throw new Error("Plugboard isn't responding. Make sure it is still running, then refresh this page.");
+    throw new Error("Maginary isn't responding. Make sure it is still running, then refresh this page.");
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || 'Something went wrong. Please try again.');
@@ -72,8 +72,8 @@ function groupBySource(list) {
 
 // ---- App frame: side menu, search, phone menu ----
 
-document.getElementById('logo').append(iconEl('plug', 20));
-document.getElementById('logo-top').append(iconEl('plug', 20));
+document.getElementById('logo').append(iconEl('sparkles', 20));
+document.getElementById('logo-top').append(iconEl('sparkles', 20));
 document.getElementById('search-icon').append(iconEl('search', 16));
 menuButton.append(iconEl('menu', 22));
 
@@ -176,7 +176,7 @@ function renderHome() {
     const box = el('div', 'empty');
     box.append(
       el('h2', null, "We didn't find any AI helpers on this computer yet."),
-      el('p', null, 'Plugboard shows the skills and plugins you have added to Claude. Add one in Claude, then refresh this page.'),
+      el('p', null, 'Maginary shows the skills and plugins you have added to Claude. Add one in Claude, then refresh this page.'),
     );
     app.append(box);
     return;
@@ -256,7 +256,7 @@ async function runHelper(item, screen, action, values, slots, form, meta = {}) {
     }
     if (!result) throw new Error('The answer was cut off. Please try again.');
   } catch (err) {
-    result = { kind: 'error', text: stop.signal.aborted ? 'Stopped. Nothing else was done.' : err.message === 'Failed to fetch' ? "Plugboard isn't responding. Make sure it is still running, then try again." : err.message };
+    result = { kind: 'error', text: stop.signal.aborted ? 'Stopped. Nothing else was done.' : err.message === 'Failed to fetch' ? "Maginary isn't responding. Make sure it is still running, then try again." : err.message };
   }
 
   if (quiet) {
@@ -370,7 +370,7 @@ function renderSetup(s, returnTo) {
     picker.append(b);
   }
   app.append(back, el('h2', 'tool-title', 'Connect your AI'), el('p', 'muted', 'Which AI do you want to use?'), picker,
-    el('p', 'lede', `Plugboard uses your own ${L} account to do the work. You need ${s.provider.plan}. Your sign-in stays with ${L}; Plugboard never sees your password.`));
+    el('p', 'lede', `Maginary uses your own ${L} account to do the work. You need ${s.provider.plan}. Your sign-in stays with ${L}; Maginary never sees your password.`));
   if (s.provider.notice) app.append(el('p', 'notice', s.provider.notice));
   if (s.error) app.append(el('p', 'status error', s.error));
 
@@ -384,7 +384,7 @@ function renderSetup(s, returnTo) {
   if (!s.installed) {
     const parts = [];
     if (!s.provider.canInstall) {
-      // Plugboard has no installer for this one: explain, link, and keep checking by itself.
+      // Maginary has no installer for this one: explain, link, and keep checking by itself.
       const link = el('a', null, s.provider.installHelp.url);
       link.href = s.provider.installHelp.url;
       link.target = '_blank';
@@ -395,7 +395,7 @@ function renderSetup(s, returnTo) {
     } else if (s.install.state === 'running') {
       parts.push(el('p', 'status', `Installing ${L}… This usually takes a minute or two. Keep this page open.`));
     } else {
-      parts.push(el('p', 'muted', `${L} is not on this computer yet. Plugboard can download the official program for you.`));
+      parts.push(el('p', 'muted', `${L} is not on this computer yet. Maginary can download the official program for you.`));
       if (s.install.state === 'failed') parts.push(el('p', 'status error', s.install.message));
       parts.push(actionButton(s.install.state === 'failed' ? 'Try again' : `Install ${L}`, () => getJson('/api/setup/install', {}).then(() => poll(returnTo))));
     }
